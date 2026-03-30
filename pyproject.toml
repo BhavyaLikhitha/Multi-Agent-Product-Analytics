@@ -1,0 +1,33 @@
+[tool.poetry]
+name = "product-review-intelligence"
+version = "0.1.0"
+description = "Multi-Agent Product Analytics with LLM Intelligence and Quality Monitoring"
+authors = ["Bhavya Likhitha Bukka"]
+readme = "README.md"
+packages = [{include = "src"}]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.0"
+black = "^24.0"
+isort = "^5.13"
+flake8 = "^7.0"
+pre-commit = "^3.6"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.black]
+line-length = 88
+target-version = ["py311"]
+
+[tool.isort]
+profile = "black"
+line_length = 88
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
