@@ -54,7 +54,6 @@ models/mistral_finetuned/*
 !models/mistral_finetuned/.gitkeep
 
 # DVC
-/dvc.lock
 .dvc/cache/
 .dvc/tmp/
 

@@ -6,9 +6,9 @@
 
 ## Current Status
 - **Current Phase:** Phase 1 — Project Setup
-- **Current Step:** 1.2 complete, ready for 1.3
+- **Current Step:** Phase 1 complete, ready for 2.1
 - **Blockers:** None
-- **Next Action:** DVC setup (Step 1.3)
+- **Next Action:** Download Amazon Reviews dataset (Step 2.1)
 
 ---
 
@@ -16,7 +16,7 @@
 
 | Phase | Description | Status | Date Started | Date Completed |
 |-------|-------------|--------|-------------|----------------|
-| Phase 1 | Project Setup | 🟡 In Progress | 2026-03-30 | — |
+| Phase 1 | Project Setup | ✅ Complete | 2026-03-30 | 2026-03-30 |
 | Phase 2 | Data Pipeline | ⬜ Not Started | — | — |
 | Phase 3 | ML Models (PyTorch) | ⬜ Not Started | — | — |
 | Phase 4 | Embeddings & Vector Search | ⬜ Not Started | — | — |
@@ -33,7 +33,7 @@
 ### Phase 1: Project Setup
 - [x] 1.1 — Initialize repo
 - [x] 1.2 — Docker foundation
-- [ ] 1.3 — DVC setup
+- [x] 1.3 — DVC setup
 
 ### Phase 2: Data Pipeline
 - [ ] 2.1 — Download Amazon Reviews dataset
@@ -88,10 +88,10 @@
 ## Session Log
 
 ### Session 1 — 2026-03-30
-**Steps completed:** 1.1 — Initialize repo, 1.2 — Docker foundation
-**Issues encountered:** None
+**Steps completed:** 1.1 — Initialize repo, 1.2 — Docker foundation, 1.3 — DVC setup
+**Issues encountered:** dvc.lock was in .gitignore — removed it (DVC needs it tracked)
 **Decisions made:** T1: ChromaDB Cloud instead of Docker (keeps Docker light, only PostgreSQL in container)
-**Next session starts at:** Step 1.3 — DVC setup
+**Next session starts at:** Step 2.1 — Download Amazon Reviews dataset
 
 <!-- Copy this template for each new session:
 
