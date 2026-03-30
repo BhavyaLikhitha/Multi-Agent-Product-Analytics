@@ -65,11 +65,11 @@ Every major decision made during this project, with reasoning. Reference this wh
 
 ## Technical Decisions (fill during build)
 
-### T1: [Step X.X] — [Decision title]
-**Decision:** 
-**Alternatives:** 
-**Why:** 
-**Tradeoff:** 
+### T1: [Step 1.2] — ChromaDB Cloud instead of Docker
+**Decision:** Use ChromaDB Cloud (free tier) instead of running ChromaDB in Docker.
+**Alternatives:** ChromaDB in docker-compose (original plan), ChromaDB in-memory (no persistence).
+**Why:** Docker with multiple services slows down the dev machine. ChromaDB Cloud free tier provides persistent vector storage without local resource usage. PostgreSQL remains in Docker since it's lightweight and needed locally.
+**Tradeoff:** Adds external dependency (network latency, cloud account required). Accepted because it keeps the dev environment fast and ChromaDB Cloud free tier is sufficient for this project's scale.
 
 <!-- Copy this template for each technical decision during build:
 

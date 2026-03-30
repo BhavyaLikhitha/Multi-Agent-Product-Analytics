@@ -6,9 +6,9 @@
 
 ## Current Status
 - **Current Phase:** Phase 1 — Project Setup
-- **Current Step:** 1.1 complete, ready for 1.2
+- **Current Step:** 1.2 complete, ready for 1.3
 - **Blockers:** None
-- **Next Action:** Docker foundation (Step 1.2)
+- **Next Action:** DVC setup (Step 1.3)
 
 ---
 
@@ -32,7 +32,7 @@
 
 ### Phase 1: Project Setup
 - [x] 1.1 — Initialize repo
-- [ ] 1.2 — Docker foundation
+- [x] 1.2 — Docker foundation
 - [ ] 1.3 — DVC setup
 
 ### Phase 2: Data Pipeline
@@ -88,10 +88,10 @@
 ## Session Log
 
 ### Session 1 — 2026-03-30
-**Steps completed:** 1.1 — Initialize repo
+**Steps completed:** 1.1 — Initialize repo, 1.2 — Docker foundation
 **Issues encountered:** None
-**Decisions made:** No new decisions — followed spec as planned (Poetry, Python 3.11, black/isort/flake8)
-**Next session starts at:** Step 1.2 — Docker foundation
+**Decisions made:** T1: ChromaDB Cloud instead of Docker (keeps Docker light, only PostgreSQL in container)
+**Next session starts at:** Step 1.3 — DVC setup
 
 <!-- Copy this template for each new session:
 
