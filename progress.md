@@ -6,9 +6,9 @@
 
 ## Current Status
 - **Current Phase:** Phase 1 — Project Setup
-- **Current Step:** Phase 1 complete, ready for 2.1
-- **Blockers:** None
-- **Next Action:** Download Amazon Reviews dataset (Step 2.1)
+- **Current Step:** Phase 2 code written, ready to run pipeline
+- **Blockers:** None — need to run download.py (large dataset, ~20M reviews)
+- **Next Action:** Run data download, then load into Snowflake/PostgreSQL
 
 ---
 
@@ -17,7 +17,7 @@
 | Phase | Description | Status | Date Started | Date Completed |
 |-------|-------------|--------|-------------|----------------|
 | Phase 1 | Project Setup | ✅ Complete | 2026-03-30 | 2026-03-30 |
-| Phase 2 | Data Pipeline | ⬜ Not Started | — | — |
+| Phase 2 | Data Pipeline | 🟡 In Progress | 2026-03-30 | — |
 | Phase 3 | ML Models (PyTorch) | ⬜ Not Started | — | — |
 | Phase 4 | Embeddings & Vector Search | ⬜ Not Started | — | — |
 | Phase 5 | LLM Fine-tuning & Evaluation | ⬜ Not Started | — | — |
@@ -36,12 +36,12 @@
 - [x] 1.3 — DVC setup
 
 ### Phase 2: Data Pipeline
-- [ ] 2.1 — Download Amazon Reviews dataset
-- [ ] 2.2 — Load into Snowflake
-- [ ] 2.3 — Load into PostgreSQL
-- [ ] 2.4 — spaCy NER pipeline
-- [ ] 2.5 — Feature engineering pipeline
-- [ ] 2.6 — EDA notebook
+- [x] 2.1 — Download Amazon Reviews dataset (script written, needs run)
+- [x] 2.2 — Load into Snowflake (script written, needs Snowflake creds + data)
+- [x] 2.3 — Load into PostgreSQL (script written, needs data)
+- [x] 2.4 — spaCy NER pipeline (6/6 tests passing)
+- [x] 2.5 — Feature engineering pipeline (script written, needs data in PG)
+- [x] 2.6 — EDA notebook (ready, needs data in PG)
 
 ### Phase 3: ML Models
 - [ ] 3.1 — Create root cause labels (LLM-assisted)
@@ -88,10 +88,10 @@
 ## Session Log
 
 ### Session 1 — 2026-03-30
-**Steps completed:** 1.1 — Initialize repo, 1.2 — Docker foundation, 1.3 — DVC setup
-**Issues encountered:** dvc.lock was in .gitignore — removed it (DVC needs it tracked)
-**Decisions made:** T1: ChromaDB Cloud instead of Docker (keeps Docker light, only PostgreSQL in container)
-**Next session starts at:** Step 2.1 — Download Amazon Reviews dataset
+**Steps completed:** 1.1, 1.2, 1.3, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6 (all code written)
+**Issues encountered:** dvc.lock was in .gitignore — removed. spaCy EntityRuler needed LOWER token matching for case-insensitivity.
+**Decisions made:** T1: ChromaDB Cloud instead of Docker
+**Next session starts at:** Run data download pipeline, then Phase 3
 
 <!-- Copy this template for each new session:
 

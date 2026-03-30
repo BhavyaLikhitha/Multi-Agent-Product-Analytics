@@ -1,15 +1,8 @@
 stages:
   download_data:
     cmd: poetry run python src/data/download.py
-    outs:
-      - data/raw/reviews.parquet
-      - data/raw/metadata.parquet
-
-  preprocess:
-    cmd: poetry run python src/data/load_postgres.py
     deps:
-      - data/raw/reviews.parquet
-      - data/raw/metadata.parquet
+      - src/data/download.py
       - src/data/load_postgres.py
 
   extract_features:
@@ -27,7 +20,3 @@ stages:
       - src/models/root_cause_classifier.py
       - src/models/anomaly_detector.py
       - src/models/helpfulness_predictor.py
-    outs:
-      - models/root_cause/
-      - models/anomaly/
-      - models/helpfulness/

@@ -65,19 +65,31 @@ Every major decision made during this project, with reasoning. Reference this wh
 
 ## Technical Decisions (fill during build)
 
-### T1: [Step 1.2] — ChromaDB Cloud instead of Docker
-**Decision:** Use ChromaDB Cloud (free tier) instead of running ChromaDB in Docker.
-**Alternatives:** ChromaDB in docker-compose (original plan), ChromaDB in-memory (no persistence).
-**Why:** Docker with multiple services slows down the dev machine. ChromaDB Cloud free tier provides persistent vector storage without local resource usage. PostgreSQL remains in Docker since it's lightweight and needed locally.
-**Tradeoff:** Adds external dependency (network latency, cloud account required). Accepted because it keeps the dev environment fast and ChromaDB Cloud free tier is sufficient for this project's scale.
+### T1: [Step 1.2] — ChromaDB Cloud instead of Docker [REVISED]
+~~**Decision:** Use ChromaDB Cloud (free tier) instead of running ChromaDB in Docker.~~
+**Revised Decision:** ChromaDB back in Docker alongside PostgreSQL.
+**Why revised:** ChromaDB Cloud free credits ($4 remaining) insufficient for 500K embeddings at 384 dimensions. Docker ChromaDB is lightweight (~200MB RAM) and PostgreSQL container was already running fine, so adding ChromaDB doesn't meaningfully impact performance.
+**Tradeoff:** Slightly heavier Docker setup, but eliminates cloud dependency and cost risk.
+
+### T2: [Step 2.1] — Stream directly into PostgreSQL, skip local parquet files
+**Decision:** Stream data from HuggingFace directly into PostgreSQL using streaming mode. No local parquet files stored.
+**Alternatives:** Download full dataset to local parquet (original plan), download subset to parquet then load.
+**Why:** Dev machine has ~12 GB free disk. Full Electronics dataset is 22.6 GB. Even 500K reviews as parquet (~300 MB) failed due to low disk. Streaming avoids all local storage — data goes HuggingFace → memory (10K batch) → PostgreSQL.
+**Tradeoff:** No local raw data backup. Acceptable because HuggingFace is the source of truth (free, always available) and Snowflake will serve as the warehouse backup. Can re-stream anytime with `poetry run python src/data/download.py`.
+
+### T3: [Step 2.1] — 500K review subset for development
+**Decision:** Use 500K reviews instead of full 20M for development and model training.
+**Alternatives:** Full 20M dataset.
+**Why:** Disk space constraint. Model training only needs labeled subsets (3K for classifier). 500K is statistically representative for EDA, features, and all ML tasks.
+**Tradeoff:** Smaller numbers in EDA/dashboard. Interview defense: "Pipeline scales to 20M — I validated on 500K for iteration speed."
 
 <!-- Copy this template for each technical decision during build:
 
 ### TN: [Step X.X] — [Decision title]
-**Decision:** 
-**Alternatives:** 
-**Why:** 
-**Tradeoff:** 
+**Decision:**
+**Alternatives:**
+**Why:**
+**Tradeoff:**
 
 -->
 

@@ -7,7 +7,18 @@ readme = "README.md"
 packages = [{include = "src"}]
 
 [tool.poetry.dependencies]
-python = "^3.11"
+python = ">=3.11,<3.15"
+datasets = "^3.0"
+pandas = "^2.2"
+pyarrow = "^18.0"
+python-dotenv = "^1.0"
+sqlalchemy = "^2.0"
+psycopg2-binary = "^2.9"
+loguru = "^0.7"
+spacy = "^3.8.14"
+matplotlib = "^3.10.8"
+seaborn = "^0.13.2"
+wordcloud = "^1.9.6"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.0"
