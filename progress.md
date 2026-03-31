@@ -5,10 +5,10 @@
 ---
 
 ## Current Status
-- **Current Phase:** Phase 1 — Project Setup
-- **Current Step:** Phase 2 code written, ready to run pipeline
-- **Blockers:** None — need to run download.py (large dataset, ~20M reviews)
-- **Next Action:** Run data download, then load into Snowflake/PostgreSQL
+- **Current Phase:** Phase 2 — Data Pipeline (nearly complete)
+- **Current Step:** Data ingestion done, NER + feature pipeline code ready to run
+- **Blockers:** None
+- **Next Action:** Run NER + feature pipeline on 500K reviews, then start Phase 3 (ML models)
 
 ---
 
@@ -36,12 +36,12 @@
 - [x] 1.3 — DVC setup
 
 ### Phase 2: Data Pipeline
-- [x] 2.1 — Download Amazon Reviews dataset (script written, needs run)
-- [x] 2.2 — Load into Snowflake (script written, needs Snowflake creds + data)
-- [x] 2.3 — Load into PostgreSQL (script written, needs data)
-- [x] 2.4 — spaCy NER pipeline (6/6 tests passing)
-- [x] 2.5 — Feature engineering pipeline (script written, needs data in PG)
-- [x] 2.6 — EDA notebook (ready, needs data in PG)
+- [x] 2.1 — Stream 500K reviews + 1.6M products into PostgreSQL (done)
+- [x] 2.2 — Load into Snowflake (500K reviews + 1.6M products loaded)
+- [x] 2.3 — PostgreSQL tables + indexes (done)
+- [x] 2.4 — spaCy NER pipeline (code + tests done, needs to run on full data)
+- [x] 2.5 — Feature engineering pipeline (code done, needs to run on full data)
+- [x] 2.6 — EDA notebook (executed)
 
 ### Phase 3: ML Models
 - [ ] 3.1 — Create root cause labels (LLM-assisted)
@@ -88,18 +88,31 @@
 ## Session Log
 
 ### Session 1 — 2026-03-30
-**Steps completed:** 1.1, 1.2, 1.3, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6 (all code written)
+**Steps completed:** 1.1, 1.2, 1.3, 2.1-2.6 (all code written)
 **Issues encountered:** dvc.lock was in .gitignore — removed. spaCy EntityRuler needed LOWER token matching for case-insensitivity.
 **Decisions made:** T1: ChromaDB Cloud instead of Docker
-**Next session starts at:** Run data download pipeline, then Phase 3
+**Next session starts at:** Run data download pipeline
+
+### Session 2 — 2026-03-30 (evening)
+**Steps completed:** 2.1 (500K reviews streamed), 2.2 (Snowflake loaded), 2.3 (PostgreSQL verified), 2.6 (EDA notebook run)
+**Issues encountered:**
+- Disk space: couldn't download full dataset as parquet, switched to streaming directly into PostgreSQL
+- HuggingFace metadata had nested `images` column causing pyarrow cast error — dropped complex columns before streaming
+- Snowflake: REVIEWS table didn't exist on first run — added CREATE TABLE IF NOT EXISTS
+- Snowflake: PostgreSQL `id` column not in Snowflake schema — dropped before insert
+**Decisions made:**
+- T1 [REVISED]: ChromaDB back to Docker ($4 cloud credit insufficient for 500K embeddings)
+- T2: Stream directly into PostgreSQL, skip local parquet files (disk constraint)
+- T3: 500K review subset for development (scales to 20M)
+**Next session starts at:** Run NER + feature pipeline on 500K reviews, then Phase 3 (ML models)
 
 <!-- Copy this template for each new session:
 
 ### Session N — [DATE]
-**Steps completed:** 
-**Issues encountered:** 
-**Decisions made:** 
-**Next session starts at:** 
+**Steps completed:**
+**Issues encountered:**
+**Decisions made:**
+**Next session starts at:**
 
 -->
 

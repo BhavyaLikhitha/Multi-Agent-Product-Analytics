@@ -19,6 +19,9 @@ spacy = "^3.8.14"
 matplotlib = "^3.10.8"
 seaborn = "^0.13.2"
 wordcloud = "^1.9.6"
+chromadb-client = "^1.5.5"
+snowflake-sqlalchemy = "^1.9.0"
+snowflake-connector-python = "^4.4.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.0"
@@ -26,6 +29,7 @@ black = "^24.0"
 isort = "^5.13"
 flake8 = "^7.0"
 pre-commit = "^3.6"
+ipykernel = "^7.2.0"
 
 [build-system]
 requires = ["poetry-core"]

@@ -103,6 +103,14 @@ def stream_metadata(engine, category: str = "Electronics"):
         streaming=True,
         trust_remote_code=True,
     )
+    # Drop columns with complex nested types that pyarrow can't cast
+    drop_cols = [
+        c
+        for c in ["images", "videos", "bought_together", "subtitle", "author"]
+        if c in ds.column_names
+    ]
+    if drop_cols:
+        ds = ds.remove_columns(drop_cols)
 
     batch = []
     total = 0

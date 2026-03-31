@@ -1,7 +1,6 @@
-"""Load raw review and metadata parquet files into Snowflake."""
+"""Load data from PostgreSQL into Snowflake warehouse."""
 
 import os
-from pathlib import Path
 
 import pandas as pd
 from dotenv import load_dotenv
@@ -10,7 +9,7 @@ from sqlalchemy import create_engine, text
 
 load_dotenv()
 
-RAW_DIR = Path("data/raw")
+BATCH_SIZE = 10_000
 
 
 def get_snowflake_engine():
@@ -26,86 +25,131 @@ def get_snowflake_engine():
     return create_engine(url)
 
 
+def get_postgres_engine():
+    host = os.environ.get("POSTGRES_HOST", "localhost")
+    port = os.environ.get("POSTGRES_PORT", "5432")
+    db = os.environ.get("POSTGRES_DB", "product_intelligence")
+    user = os.environ.get("POSTGRES_USER", "postgres")
+    password = os.environ.get("POSTGRES_PASSWORD", "postgres")
+    return create_engine(f"postgresql://{user}:{password}@{host}:{port}/{db}")
+
+
 def setup_snowflake(engine):
-    """Create database and schema if they don't exist."""
+    """Create database, schema, and tables if they don't exist."""
     with engine.connect() as conn:
         conn.execute(text("CREATE DATABASE IF NOT EXISTS PRODUCT_INTELLIGENCE"))
         conn.execute(text("USE DATABASE PRODUCT_INTELLIGENCE"))
         conn.execute(text("CREATE SCHEMA IF NOT EXISTS RAW"))
         conn.execute(text("USE SCHEMA RAW"))
-        conn.commit()
-    logger.info("Snowflake database and schema ready")
-
-
-def load_reviews(engine):
-    """Load reviews parquet into Snowflake REVIEWS table."""
-    path = RAW_DIR / "reviews.parquet"
-    if not path.exists():
-        raise FileNotFoundError(f"Reviews file not found: {path}")
-
-    logger.info("Reading reviews parquet...")
-    df = pd.read_parquet(path)
-
-    # Standardize column names
-    column_map = {
-        "rating": "rating",
-        "title": "title",
-        "text": "text",
-        "helpful_vote": "helpful_votes",
-        "timestamp": "timestamp",
-        "asin": "asin",
-        "user_id": "user_id",
-        "parent_asin": "parent_asin",
-    }
-    df = df.rename(columns={k: v for k, v in column_map.items() if k in df.columns})
-
-    logger.info(f"Loading {len(df):,} reviews into Snowflake...")
-    df.to_sql("reviews", engine, if_exists="replace", index=False, chunksize=10000)
-
-    with engine.connect() as conn:
-        count = conn.execute(text("SELECT COUNT(*) FROM reviews")).scalar()
-    logger.info(f"Loaded {count:,} reviews into Snowflake")
-
-
-def load_metadata(engine):
-    """Load product metadata parquet into Snowflake PRODUCTS table."""
-    path = RAW_DIR / "metadata.parquet"
-    if not path.exists():
-        raise FileNotFoundError(f"Metadata file not found: {path}")
-
-    logger.info("Reading metadata parquet...")
-    df = pd.read_parquet(path)
-
-    column_map = {
-        "main_category": "category",
-        "average_rating": "average_rating",
-        "rating_number": "rating_number",
-        "title": "title",
-        "description": "description",
-        "price": "price",
-        "features": "features",
-        "parent_asin": "parent_asin",
-    }
-    df = df.rename(columns={k: v for k, v in column_map.items() if k in df.columns})
-
-    # Flatten list columns to strings for Snowflake compatibility
-    for col in df.columns:
-        if df[col].apply(type).eq(list).any():
-            df[col] = df[col].apply(
-                lambda x: "; ".join(str(i) for i in x) if isinstance(x, list) else x
+        conn.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS REVIEWS (
+                    asin VARCHAR,
+                    parent_asin VARCHAR,
+                    user_id VARCHAR,
+                    rating FLOAT,
+                    title TEXT,
+                    text TEXT,
+                    helpful_votes INTEGER,
+                    timestamp TIMESTAMP
+                )
+                """
             )
+        )
+        conn.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS PRODUCTS (
+                    parent_asin VARCHAR,
+                    title TEXT,
+                    description TEXT,
+                    price VARCHAR,
+                    category VARCHAR,
+                    features TEXT,
+                    average_rating FLOAT,
+                    rating_number INTEGER
+                )
+                """
+            )
+        )
+        conn.commit()
+    logger.info("Snowflake database, schema, and tables ready")
 
-    logger.info(f"Loading {len(df):,} products into Snowflake...")
-    df.to_sql("products", engine, if_exists="replace", index=False, chunksize=10000)
 
-    with engine.connect() as conn:
-        count = conn.execute(text("SELECT COUNT(*) FROM products")).scalar()
-    logger.info(f"Loaded {count:,} products into Snowflake")
+def load_reviews(sf_engine, pg_engine):
+    """Load reviews from PostgreSQL into Snowflake."""
+    try:
+        with sf_engine.connect() as conn:
+            count = conn.execute(text("SELECT COUNT(*) FROM REVIEWS")).scalar()
+            if count and count > 0:
+                logger.info(f"Snowflake REVIEWS already has {count:,} rows, skipping")
+                return
+    except Exception:
+        logger.info("REVIEWS table does not exist yet, creating...")
+
+    total = pd.read_sql(text("SELECT COUNT(*) FROM reviews"), pg_engine).iloc[0, 0]
+    logger.info(f"Loading {total:,} reviews from PostgreSQL into Snowflake...")
+
+    offset = 0
+    loaded = 0
+
+    while offset < total:
+        query = text(
+            f"SELECT * FROM reviews ORDER BY asin LIMIT {BATCH_SIZE} OFFSET {offset}"
+        )
+        df = pd.read_sql(query, pg_engine)
+        if df.empty:
+            break
+
+        df = df.drop(columns=["id"], errors="ignore")
+        df.to_sql("reviews", sf_engine, if_exists="append", index=False)
+        loaded += len(df)
+        offset += BATCH_SIZE
+        logger.info(f"Loaded {loaded:,} / {total:,} reviews into Snowflake")
+
+    logger.info(f"Done — {loaded:,} reviews in Snowflake")
+
+
+def load_metadata(sf_engine, pg_engine):
+    """Load product metadata from PostgreSQL into Snowflake."""
+    try:
+        with sf_engine.connect() as conn:
+            count = conn.execute(text("SELECT COUNT(*) FROM PRODUCTS")).scalar()
+            if count and count > 0:
+                logger.info(f"Snowflake PRODUCTS already has {count:,} rows, skipping")
+                return
+    except Exception:
+        logger.info("PRODUCTS table does not exist yet, creating...")
+
+    total = pd.read_sql(text("SELECT COUNT(*) FROM products"), pg_engine).iloc[0, 0]
+    logger.info(f"Loading {total:,} products from PostgreSQL into Snowflake...")
+
+    offset = 0
+    loaded = 0
+
+    while offset < total:
+        query = text(
+            "SELECT * FROM products ORDER BY parent_asin"
+            f" LIMIT {BATCH_SIZE} OFFSET {offset}"
+        )
+        df = pd.read_sql(query, pg_engine)
+        if df.empty:
+            break
+
+        df = df.drop(columns=["id"], errors="ignore")
+        df.to_sql("products", sf_engine, if_exists="append", index=False)
+        loaded += len(df)
+        offset += BATCH_SIZE
+        logger.info(f"Loaded {loaded:,} / {total:,} products into Snowflake")
+
+    logger.info(f"Done — {loaded:,} products in Snowflake")
 
 
 if __name__ == "__main__":
-    engine = get_snowflake_engine()
-    setup_snowflake(engine)
-    load_reviews(engine)
-    load_metadata(engine)
+    sf_engine = get_snowflake_engine()
+    pg_engine = get_postgres_engine()
+    setup_snowflake(sf_engine)
+    load_reviews(sf_engine, pg_engine)
+    load_metadata(sf_engine, pg_engine)
     logger.info("Snowflake loading complete!")
