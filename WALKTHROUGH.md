@@ -199,29 +199,34 @@ docker exec product_intelligence_db psql -U postgres -d product_intelligence -c 
 - Used token-level LOWER matching for case-insensitive extraction
 - Batch processing with spaCy's `pipe()` for speed
 
-**Why custom NER, not just keywords:**
-- spaCy's EntityRuler handles multi-word patterns ("hard drive", "stopped working")
-- Integrates with spaCy's built-in NER for time references
-- Extensible — can add ML-based entity recognition later
-- Production-grade: processes thousands of reviews per second with `pipe()`
+**Why custom NER, not LLM-based extraction:**
+- **Speed:** spaCy processes thousands of reviews per second. An LLM API call takes ~0.5-1s per review — for 500K reviews that's days vs minutes.
+- **Cost:** 500K API calls would blow past the $0-10 budget.
+- **Deterministic:** Same input always gives same output. No drift or hallucination.
+- spaCy's EntityRuler handles multi-word patterns ("hard drive", "keeps disconnecting")
+- We DO use LLMs where they make sense — Step 3.1 uses Groq to label ~3K reviews where nuance matters.
 
-**How to explain:** "I built a custom entity extraction pipeline because no off-the-shelf NER model knows that 'battery' is a product component in the context of electronics reviews. The EntityRuler gives us pattern-based extraction with spaCy's speed."
+**Pattern coverage (after EDA-driven expansion):**
+- 45+ component patterns (battery, screen, bluetooth, USB, charger, etc.)
+- 120+ issue patterns across 9 categories: physical damage, defects, power/charging, performance, connectivity, display/audio, fit/size, misleading descriptions, shipping issues
 
-**Flow:** Review text → spaCy NER → {components: ["battery", "screen"], issues: ["broken", "overheating"]} → used by feature pipeline AND agents
+**How to explain:** "Patterns give us speed and determinism for bulk extraction. We use LLMs only where nuance matters — labeling 3K reviews for the classifier."
+
+**Flow:** Review text → spaCy NER → {components: ["battery", "screen"], issues: ["died", "cracked"]} → used by feature pipeline AND agents
 
 **Run it yourself:**
 ```bash
-# Run NER tests
+# Run NER tests (9 tests)
 poetry run pytest tests/test_ner.py -v
 
 # Quick demo on a sample review
 poetry run python -c "
-from src.features.ner_extractor import create_ner_pipeline, extract_entities
-nlp = create_ner_pipeline()
-entities = extract_entities(nlp, 'The battery died after 2 weeks and the screen is cracked')
+from src.features.ner_extractor import load_nlp, extract_from_text
+nlp = load_nlp()
+entities = extract_from_text(nlp, 'The battery died after 2 weeks and the screen is cracked')
 print(entities)
 "
-# Expected: {'components': ['battery', 'screen'], 'issues': ['cracked'], 'time_refs': []}
+# Expected: {'components': ['battery', 'screen'], 'issues': ['died', 'cracked'], 'time_refs': []}
 ```
 
 ### Step 2.5 — Feature Engineering

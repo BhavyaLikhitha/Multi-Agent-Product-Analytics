@@ -5,10 +5,10 @@
 ---
 
 ## Current Status
-- **Current Phase:** Phase 2 — Data Pipeline (nearly complete)
-- **Current Step:** Data ingestion done, NER + feature pipeline code ready to run
+- **Current Phase:** Phase 2 — Data Pipeline (finishing up)
+- **Current Step:** NER + feature pipeline running on 500K reviews
 - **Blockers:** None
-- **Next Action:** Run NER + feature pipeline on 500K reviews, then start Phase 3 (ML models)
+- **Next Action:** Verify features in PostgreSQL, then start Phase 3 (root cause labels + ML models)
 
 ---
 
@@ -39,9 +39,9 @@
 - [x] 2.1 — Stream 500K reviews + 1.6M products into PostgreSQL (done)
 - [x] 2.2 — Load into Snowflake (500K reviews + 1.6M products loaded)
 - [x] 2.3 — PostgreSQL tables + indexes (done)
-- [x] 2.4 — spaCy NER pipeline (code + tests done, needs to run on full data)
-- [x] 2.5 — Feature engineering pipeline (code done, needs to run on full data)
-- [x] 2.6 — EDA notebook (executed)
+- [x] 2.4 — spaCy NER pipeline (120+ issue patterns, 45+ components, 9/9 tests passing, running on full data)
+- [x] 2.5 — Feature engineering pipeline (running on 500K reviews)
+- [x] 2.6 — EDA notebook (executed, validated data + NER output)
 
 ### Phase 3: ML Models
 - [ ] 3.1 — Create root cause labels (LLM-assisted)
