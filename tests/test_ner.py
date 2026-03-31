@@ -32,7 +32,7 @@ def test_extract_single_review(nlp):
 def test_extract_bluetooth_issue(nlp):
     result = extract_from_text(nlp, SAMPLE_REVIEWS[1])
     assert "bluetooth" in result["components"]
-    assert "disconnecting" in result["issues"]
+    assert any("disconnect" in i for i in result["issues"])
 
 
 def test_extract_multiple_entities(nlp):
@@ -59,3 +59,21 @@ def test_no_entities(nlp):
     result = extract_from_text(nlp, "Great product, works perfectly fine!")
     assert isinstance(result["components"], list)
     assert isinstance(result["issues"], list)
+
+
+def test_expanded_issues(nlp):
+    """Test new issue patterns added after EDA revealed weak detection."""
+    result = extract_from_text(nlp, "This is garbage, total waste of money")
+    assert "garbage" in result["issues"] or "waste of money" in result["issues"]
+
+
+def test_negative_quality_words(nlp):
+    result = extract_from_text(nlp, "The battery died and the charger is flimsy")
+    assert "battery" in result["components"]
+    assert "charger" in result["components"]
+    assert "died" in result["issues"] or "flimsy" in result["issues"]
+
+
+def test_shipping_issues(nlp):
+    result = extract_from_text(nlp, "Item arrived damaged with missing parts")
+    assert "arrived damaged" in result["issues"] or "missing parts" in result["issues"]
