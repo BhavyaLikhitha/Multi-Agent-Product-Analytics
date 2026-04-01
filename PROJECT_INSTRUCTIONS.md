@@ -135,3 +135,4 @@ This is non-negotiable. Every design choice must be documented for interview pre
 
 ### How to Hand Off to a New Chat
 Upload all 4 files + say: "I'm continuing a project. Read all files for full context. PROGRESS.md shows where I am. DECISIONS.md has all tradeoffs. If you change any decision, update DECISIONS.md immediately. Continue from the next incomplete step in BUILD_ROADMAP.md."
+
