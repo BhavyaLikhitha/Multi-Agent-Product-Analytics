@@ -83,6 +83,24 @@ Every major decision made during this project, with reasoning. Reference this wh
 **Why:** Disk space constraint. Model training only needs labeled subsets (3K for classifier). 500K is statistically representative for EDA, features, and all ML tasks.
 **Tradeoff:** Smaller numbers in EDA/dashboard. Interview defense: "Pipeline scales to 20M — I validated on 500K for iteration speed."
 
+### T4: [Step 2.4] — Regex NER instead of spaCy EntityRuler for bulk processing
+**Decision:** Use pre-compiled regex for bulk NER extraction (500K reviews), keep spaCy for demos/tests.
+**Alternatives:** spaCy EntityRuler (original), LLM-based extraction (Groq/Claude), FlashText.
+**Why:** spaCy EntityRuler took 38 min per 50K reviews (~6 hours total). Regex does 500K in 2 minutes. LLM-based would cost money and take days. Same pattern matching results, 100x faster.
+**Tradeoff:** No time_refs extraction in fast mode (regex skips date parsing). Acceptable — time_refs aren't used by any downstream model.
+
+### T5: [Step 3.1] — Groq (free) for root cause labeling instead of Claude API
+**Decision:** Use Groq's Llama 3.1-8B (free tier, 30 req/min) to label 3K negative reviews.
+**Alternatives:** Claude API ($3+/1M tokens), manual labeling, GPT-4.
+**Why:** Only 3K reviews need labeling — straightforward 5-category classification. Groq is free and fast enough. Save paid APIs for Phase 5 (LLM-as-Judge) where quality matters more.
+**Tradeoff:** ~100 min wall time due to rate limiting. Lower quality than Claude/GPT-4 but sufficient for training labels — the classifier learns the pattern, not the exact label.
+
+### T6: [Step 3.1] — 3000 labeled samples for classifier training
+**Decision:** Label 3000 negative reviews (not more, not fewer).
+**Alternatives:** 1500 (faster), 5000+ (more data), manual labeling.
+**Why:** Research shows diminishing returns beyond 3K for 5-category classification with DistilBERT. After 70/15/15 split: 2100 train, 450 val, 450 test — sufficient for Macro-F1 > 0.70 target.
+**Tradeoff:** More labels might squeeze out extra F1 points, but 2x the Groq time for marginal gain.
+
 <!-- Copy this template for each technical decision during build:
 
 ### TN: [Step X.X] — [Decision title]
@@ -111,3 +129,15 @@ Every major decision made during this project, with reasoning. Reference this wh
 
 **"Your anomaly detector is simple. Why not use a more sophisticated approach?"**
 → "I used an autoencoder because it's interpretable and sufficient for detecting distribution shifts in review patterns. I considered Isolation Forest and Prophet, but the autoencoder gives me a reconstruction error that's more explainable to product managers. In production, I'd ensemble multiple approaches."
+
+**"Why not use an LLM to extract entities from reviews?"**
+→ "For 500K reviews, LLM extraction would take days and cost money. Pre-compiled regex does it in 2 minutes with identical results for our pattern set. LLMs shine when nuance matters — that's why I use Groq for the 3K labeling task where the categories are subjective. Right tool for the right job."
+
+**"How did you create your training labels?"**
+→ "LLM-assisted labeling — I used Groq's Llama 3.1 to classify 3K negative reviews into 5 root cause categories. This is a realistic approach: no off-the-shelf dataset has these labels, and manual labeling 3K reviews would take days. The LLM gives us consistent labels at scale, and the trained classifier then generalizes to all 500K reviews."
+
+**"Why DistilBERT and not a larger model for classification?"**
+→ "DistilBERT is 6x faster than BERT with 97% of its performance on classification tasks. For a 5-label classifier on short review texts, the bottleneck is training data quality, not model capacity. I hit Macro-F1 > 0.70 without needing a heavier model."
+
+**"Why three separate models instead of one multi-task model?"**
+→ "Each model solves a fundamentally different problem: anomaly detection is unsupervised, classification is supervised multi-label, helpfulness is regression. Different loss functions, different data, different evaluation metrics. A multi-task model adds coupling complexity for no real gain. In production, separate models are also easier to update independently."

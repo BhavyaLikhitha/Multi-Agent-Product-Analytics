@@ -289,9 +289,20 @@ poetry run jupyter notebook notebooks/01_eda.ipynb
 **Flow:** PostgreSQL features → 3 PyTorch models → MLflow (tracking) → model checkpoints
 
 ### Step 3.1 — Root Cause Labels
-**What we did:** [TBD]
+**What we did:**
+- Sampled 3000 negative reviews (1-2 stars, 50+ characters) from PostgreSQL
+- Used Groq's Llama 3.1-8B (free tier) to classify each into 5 root cause categories
+- Categories: defect, shipping, description, size, price (multi-label — a review can be both defect AND shipping)
+- Rate-limited to 28 requests per 62 seconds (Groq free tier = 30 req/min)
+- Saved to `data/processed/labeled_reviews.csv`
 
-**Flow:** 3000 negative reviews → LLM labels them → manual verification of 500 → `labeled_reviews.csv` → classifier training data
+**Why LLM labeling, not manual:**
+- Manual labeling 3K reviews would take days
+- No off-the-shelf dataset has these root cause categories
+- LLM gives consistent labels at scale — the classifier learns the pattern, not the exact label
+- Used Groq (free) instead of Claude API ($3+) — sufficient quality for 5-category classification
+
+**Flow:** 3000 negative reviews → Groq Llama 3.1 labels them → `labeled_reviews.csv` → classifier training data
 
 **Run it yourself:**
 ```bash

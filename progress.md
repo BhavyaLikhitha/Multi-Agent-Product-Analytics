@@ -5,10 +5,10 @@
 ---
 
 ## Current Status
-- **Current Phase:** Phase 2 — Data Pipeline (finishing up)
-- **Current Step:** NER + feature pipeline running on 500K reviews
-- **Blockers:** None
-- **Next Action:** Verify features in PostgreSQL, then start Phase 3 (root cause labels + ML models)
+- **Current Phase:** Phase 3 — ML Models (in progress)
+- **Current Step:** Root cause labeling running (3K reviews via Groq), model scripts ready
+- **Blockers:** None — waiting for labeling to finish (~100 min)
+- **Next Action:** Run all 3 PyTorch models once labeling completes
 
 ---
 
@@ -17,8 +17,8 @@
 | Phase | Description | Status | Date Started | Date Completed |
 |-------|-------------|--------|-------------|----------------|
 | Phase 1 | Project Setup | ✅ Complete | 2026-03-30 | 2026-03-30 |
-| Phase 2 | Data Pipeline | 🟡 In Progress | 2026-03-30 | — |
-| Phase 3 | ML Models (PyTorch) | ⬜ Not Started | — | — |
+| Phase 2 | Data Pipeline | ✅ Complete | 2026-03-30 | 2026-03-31 |
+| Phase 3 | ML Models (PyTorch) | 🟡 In Progress | 2026-03-31 | — |
 | Phase 4 | Embeddings & Vector Search | ⬜ Not Started | — | — |
 | Phase 5 | LLM Fine-tuning & Evaluation | ⬜ Not Started | — | — |
 | Phase 6 | Agentic AI (LangGraph) | ⬜ Not Started | — | — |
@@ -44,10 +44,10 @@
 - [x] 2.6 — EDA notebook (executed, validated data + NER output)
 
 ### Phase 3: ML Models
-- [ ] 3.1 — Create root cause labels (LLM-assisted)
-- [ ] 3.2 — Train root cause classifier (PyTorch)
-- [ ] 3.3 — Train anomaly detector (PyTorch)
-- [ ] 3.4 — Train helpfulness predictor (PyTorch)
+- [x] 3.1 — Create root cause labels (Groq Llama 3.1, 3K reviews, running)
+- [x] 3.2 — Root cause classifier code ready (DistilBERT, needs labels to run)
+- [x] 3.3 — Anomaly detector code ready (Autoencoder on product_features)
+- [x] 3.4 — Helpfulness predictor code ready (Feedforward NN)
 - [ ] 3.5 — MLflow experiment dashboard
 
 ### Phase 4: Embeddings & Vector Search
