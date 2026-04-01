@@ -1,4 +1,8 @@
-"""Create root cause labels for negative reviews using Groq LLM."""
+"""Create root cause labels for negative reviews using Groq LLM.
+
+Saves progress incrementally so you can resume after interruptions
+or API rate limits. Just rerun the script to continue.
+"""
 
 import json
 import os
@@ -12,9 +16,16 @@ from sqlalchemy import create_engine, text
 
 load_dotenv()
 
-LABEL_CATEGORIES = ["defect", "shipping", "description", "size", "price"]
+LABEL_CATEGORIES = [
+    "defect",
+    "shipping",
+    "description",
+    "size",
+    "price",
+]
 SAMPLE_SIZE = 3000
 OUTPUT_PATH = "data/processed/labeled_reviews.csv"
+SAMPLES_PATH = "data/processed/sampled_reviews.csv"
 
 SYSTEM_PROMPT = (
     "You are a product review classifier. "
@@ -48,12 +59,12 @@ def get_postgres_engine():
     port = os.environ.get("POSTGRES_PORT", "5432")
     db = os.environ.get("POSTGRES_DB", "product_intelligence")
     user = os.environ.get("POSTGRES_USER", "postgres")
-    password = os.environ.get("POSTGRES_PASSWORD", "postgres")
-    return create_engine(f"postgresql://{user}:{password}@{host}:{port}/{db}")
+    pw = os.environ.get("POSTGRES_PASSWORD", "postgres")
+    return create_engine(f"postgresql://{user}:{pw}@{host}:{port}/{db}")
 
 
 def sample_negative_reviews(engine, n: int = SAMPLE_SIZE) -> pd.DataFrame:
-    """Sample negative reviews (1-2 stars) with sufficient text."""
+    """Sample negative reviews (1-2 stars) with text."""
     query = text(
         f"""
         SELECT id, asin, rating, title, text
@@ -77,19 +88,23 @@ def label_review(client: Groq, review_text: str, max_retries: int = 3) -> dict:
             response = client.chat.completions.create(
                 model="llama-3.1-8b-instant",
                 messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": review_text[:1000]},
+                    {
+                        "role": "system",
+                        "content": SYSTEM_PROMPT,
+                    },
+                    {
+                        "role": "user",
+                        "content": review_text[:1000],
+                    },
                 ],
                 temperature=0.0,
                 max_tokens=100,
             )
             content = response.choices[0].message.content.strip()
-            # Extract JSON from response
             start = content.find("{")
             end = content.rfind("}") + 1
             if start >= 0 and end > start:
                 labels = json.loads(content[start:end])
-                # Validate all keys present and values are 0 or 1
                 result = {}
                 for cat in LABEL_CATEGORIES:
                     val = labels.get(cat, 0)
@@ -104,47 +119,87 @@ def label_review(client: Groq, review_text: str, max_retries: int = 3) -> dict:
     return {cat: 0 for cat in LABEL_CATEGORIES}
 
 
-def label_all_reviews(df: pd.DataFrame) -> pd.DataFrame:
-    """Label all reviews using Groq with rate limiting."""
+def label_all_reviews(df: pd.DataFrame, start_from: int = 0) -> pd.DataFrame:
+    """Label reviews with incremental saving."""
     client = Groq(api_key=os.environ["GROQ_API_KEY"])
-
-    labels = []
     total = len(df)
 
-    for i, row in df.iterrows():
-        result = label_review(client, row["text"])
-        labels.append(result)
+    # Load existing progress if any
+    if start_from > 0 and os.path.exists(OUTPUT_PATH):
+        existing = pd.read_csv(OUTPUT_PATH)
+        logger.info(f"Resuming from {len(existing):,} / {total:,}")
+    else:
+        existing = pd.DataFrame()
 
-        done = len(labels)
+    rows = []
+    for idx in range(start_from, total):
+        row = df.iloc[idx]
+        result = label_review(client, row["text"])
+
+        row_data = row.to_dict()
+        row_data.update(result)
+        rows.append(row_data)
+
+        done = start_from + len(rows)
+        if done % 50 == 0:
+            # Save progress every 50 reviews
+            new_df = pd.DataFrame(rows)
+            combined = pd.concat([existing, new_df], ignore_index=True)
+            combined.to_csv(OUTPUT_PATH, index=False)
+            logger.info(f"Labeled {done:,} / {total:,} " f"(saved to disk)")
+            existing = combined
+            rows = []
+
         if done % 100 == 0:
-            logger.info(f"Labeled {done:,} / {total:,} reviews")
+            logger.info(f"Progress: {done:,} / {total:,} reviews")
 
         # Rate limiting: Groq free tier = 30 req/min
-        if done % 28 == 0:
+        if len(rows) > 0 and (start_from + len(rows)) % 28 == 0:
             time.sleep(62)
 
-    labels_df = pd.DataFrame(labels)
-    return pd.concat([df.reset_index(drop=True), labels_df], axis=1)
+    # Save any remaining
+    if rows:
+        new_df = pd.DataFrame(rows)
+        combined = pd.concat([existing, new_df], ignore_index=True)
+        combined.to_csv(OUTPUT_PATH, index=False)
+
+    final = pd.read_csv(OUTPUT_PATH)
+    return final
 
 
 if __name__ == "__main__":
     engine = get_postgres_engine()
+    os.makedirs("data/processed", exist_ok=True)
 
-    # Check if labels already exist
+    # Check if we have a completed run
     if os.path.exists(OUTPUT_PATH):
         existing = pd.read_csv(OUTPUT_PATH)
-        logger.info(f"Labels already exist: {len(existing):,} rows at {OUTPUT_PATH}")
-        logger.info("Delete the file to re-generate labels.")
+        if len(existing) >= SAMPLE_SIZE:
+            logger.info(f"Labels complete: {len(existing):,} rows")
+            for cat in LABEL_CATEGORIES:
+                count = existing[cat].sum()
+                pct = count / len(existing) * 100
+                logger.info(f"  {cat}: {count:,} ({pct:.1f}%)")
+            exit(0)
+        else:
+            logger.info(f"Resuming: {len(existing):,} / " f"{SAMPLE_SIZE:,} done")
+            # Load the same sample set
+            if os.path.exists(SAMPLES_PATH):
+                df = pd.read_csv(SAMPLES_PATH)
+            else:
+                logger.error("Cannot resume — sample file missing")
+                exit(1)
+            start_from = len(existing)
     else:
-        os.makedirs("data/processed", exist_ok=True)
-
+        # Fresh start — sample and save the sample set
         df = sample_negative_reviews(engine)
-        labeled_df = label_all_reviews(df)
-        labeled_df.to_csv(OUTPUT_PATH, index=False)
+        df.to_csv(SAMPLES_PATH, index=False)
+        start_from = 0
 
-        # Print summary
-        logger.info(f"Saved {len(labeled_df):,} labeled reviews to {OUTPUT_PATH}")
-        for cat in LABEL_CATEGORIES:
-            count = labeled_df[cat].sum()
-            pct = count / len(labeled_df) * 100
-            logger.info(f"  {cat}: {count:,} ({pct:.1f}%)")
+    labeled_df = label_all_reviews(df, start_from)
+
+    logger.info(f"Saved {len(labeled_df):,} labeled reviews " f"to {OUTPUT_PATH}")
+    for cat in LABEL_CATEGORIES:
+        count = labeled_df[cat].sum()
+        pct = count / len(labeled_df) * 100
+        logger.info(f"  {cat}: {count:,} ({pct:.1f}%)")
