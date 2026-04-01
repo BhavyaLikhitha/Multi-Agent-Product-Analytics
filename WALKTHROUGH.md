@@ -4,6 +4,7 @@ Step-by-step explanation of what was built, why, and how. Read this to walk an i
 
 ---
 
+
 ## Architecture Overview — The Big Picture
 
 ```
