@@ -19,7 +19,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import DeclarativeBase
 
-from src.features.ner_extractor import extract_batch, load_nlp
+from src.features.ner_extractor import extract_batch_fast
 
 load_dotenv()
 
@@ -98,10 +98,18 @@ def compute_features(engine) -> pd.DataFrame:
     logger.info("Computing complaint keyword counts...")
     df["neg_kw_count"] = df["text"].apply(count_negative_keywords)
 
-    logger.info("Running NER extraction on review texts...")
-    nlp = load_nlp()
+    logger.info(f"Running NER extraction on {len(df):,} review texts...")
     texts = df["text"].fillna("").tolist()
-    ner_results = extract_batch(nlp, texts, batch_size=500)
+
+    # Fast regex-based extraction (~100x faster than spaCy)
+    chunk_size = 100_000
+    ner_results = []
+    for i in range(0, len(texts), chunk_size):
+        chunk = texts[i : i + chunk_size]
+        ner_results.extend(extract_batch_fast(chunk))
+        logger.info(
+            f"NER progress: {min(i + chunk_size, len(texts)):,} / {len(texts):,}"
+        )
     df["ner"] = ner_results
 
     logger.info("Aggregating daily features per product...")
