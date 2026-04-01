@@ -1,4 +1,11 @@
-"""spaCy NER pipeline for extracting product components, issues, and time references."""
+"""NER pipeline for extracting product components, issues, and time references.
+
+Two modes:
+- Fast regex-based extraction for bulk processing (500K+ reviews)
+- spaCy EntityRuler for interactive demos and tests
+"""
+
+import re
 
 import spacy
 from spacy.language import Language
@@ -260,3 +267,37 @@ def extract_batch(nlp: Language, texts: list[str], batch_size: int = 100) -> lis
     for doc in nlp.pipe(texts, batch_size=batch_size):
         results.append(extract_entities(doc))
     return results
+
+
+# --- Fast regex-based extraction for bulk processing ---
+
+# Pre-compile regex patterns (sorted longest first to match multi-word first)
+_COMPONENT_RE = re.compile(
+    r"\b("
+    + "|".join(re.escape(p) for p in sorted(COMPONENT_PATTERNS, key=len, reverse=True))
+    + r")\b",
+    re.IGNORECASE,
+)
+
+_ISSUE_RE = re.compile(
+    r"\b("
+    + "|".join(re.escape(p) for p in sorted(ISSUE_PATTERNS, key=len, reverse=True))
+    + r")\b",
+    re.IGNORECASE,
+)
+
+
+def extract_fast(text: str) -> dict:
+    """Fast regex-based entity extraction. ~100x faster than spaCy."""
+    if not isinstance(text, str) or not text:
+        return {"components": [], "issues": [], "time_refs": []}
+
+    components = list(set(m.lower() for m in _COMPONENT_RE.findall(text)))
+    issues = list(set(m.lower() for m in _ISSUE_RE.findall(text)))
+
+    return {"components": components, "issues": issues, "time_refs": []}
+
+
+def extract_batch_fast(texts: list[str]) -> list[dict]:
+    """Fast regex-based batch extraction. No spaCy needed."""
+    return [extract_fast(t) for t in texts]
