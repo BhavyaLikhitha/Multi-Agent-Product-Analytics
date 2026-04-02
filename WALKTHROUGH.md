@@ -319,61 +319,85 @@ print(df[['defect','shipping','description','size','price']].sum())
 ```
 
 ### Step 3.2 — Root Cause Classifier
-**What we did:** [TBD]
+**What we did:**
+- Fine-tuned DistilBERT (66M params) on 3K labeled reviews for multi-label classification
+- 5 output categories: defect, shipping, description, size, price
+- Used BCEWithLogitsLoss with **inverse-frequency class weights** to handle imbalanced data (shipping = 5.7% vs defect = 81.2%)
+- Added **threshold tuning** on validation set (tests 0.3-0.5) instead of fixed 0.5
+- 10 epochs, batch size 16, AdamW optimizer, lr=2e-5
+- First run: F1=0.67 (no class weights, 5 epochs). Second run with fixes targeting >0.70
 
-**Flow:** Labeled reviews → DistilBERT + BCEWithLogitsLoss → multi-label output: [defect, shipping, description, size, price] → MLflow logs metrics
+**Per-category results (first run):**
+- defect: F1=0.92 (strong — 370 test samples)
+- size: F1=0.71 (good)
+- price: F1=0.71 (good)
+- description: F1=0.59 (weak — only 46 test samples)
+- shipping: F1=0.45 (weak — only 22 test samples)
+
+**How to explain:** "The rare categories dragged macro-F1 down. I fixed it with inverse-frequency class weights — the loss function penalizes missing a shipping review 15x more than missing a defect review. This is standard practice for imbalanced multi-label classification."
+
+**Flow:** labeled_reviews.csv → DistilBERT + class weights → multi-label output → MLflow logs metrics
 
 **Run it yourself:**
 ```bash
-# Train the root cause classifier
 poetry run python src/models/root_cause_classifier.py
-
-# Check MLflow for results
-# Open http://localhost:5000 → experiment "root_cause_classifier"
 # Target: Macro-F1 > 0.70
 ```
 
 ### Step 3.3 — Anomaly Detector
-**What we did:** [TBD]
+**What we did:**
+- Trained a symmetric autoencoder (input→32→16→8→16→32→input) on 486K product feature rows
+- Features: daily_sentiment_avg, review_velocity, negative_ratio, complaint_keywords
+- Unsupervised — learns "normal" product patterns, flags deviations
+- Anomaly score = reconstruction error (MSE between input and output)
+- Threshold at 95th percentile: 0.213
+- Detected 21,310 quality alerts, written to PostgreSQL `alerts` table
+- Severity: "critical" if score > 2x threshold, "warning" otherwise
+- Loss converged: 0.261 → 0.087 over 50 epochs
 
-**Flow:** `product_features` table → autoencoder trains on "normal" products → reconstruction error = anomaly score → threshold at 95th percentile → high score = quality alert
+**How to explain:** "The autoencoder learns what 'normal' product review patterns look like. When a product's features deviate significantly — sudden spike in negative reviews, review velocity jump — the reconstruction error spikes and triggers an alert. It's unsupervised, so no labels needed."
+
+**Flow:** `product_features` → autoencoder → reconstruction error → threshold → `alerts` table
 
 **Run it yourself:**
 ```bash
-# Train the anomaly detection autoencoder
 poetry run python src/models/anomaly_detector.py
-
-# Check MLflow for results
-# Target: Precision@95th > 0.80
+# Writes alerts to PostgreSQL automatically
 ```
 
 ### Step 3.4 — Helpfulness Predictor
-**What we did:** [TBD]
+**What we did:**
+- Trained a feedforward neural network (8→64→32→16→1) with BatchNorm + Dropout
+- 8 engineered features: text_length, word_count, rating, title_length, has_exclamation, has_question, avg_word_length, uppercase_ratio
+- Trained on 100K reviews, 30 epochs, Adam optimizer with ReduceLROnPlateau
+- **Test MAE = 1.46 (TARGET PASSED, target was < 2.0)**
+- Best validation MAE = 1.58 (epoch 1), test MAE improved with best checkpoint
 
-**Flow:** Review features (length, rating, NER count, etc.) → neural network → predicts helpful_votes → surfaces most actionable reviews
+**How to explain:** "This model predicts how helpful a review will be based on simple features. A PM can use it to surface the most actionable reviews for any product — the ones customers actually find useful."
+
+**Flow:** Review features → feedforward NN → predicted helpful_votes → surfaces actionable reviews
 
 **Run it yourself:**
 ```bash
-# Train the helpfulness predictor
 poetry run python src/models/helpfulness_predictor.py
-
-# Check MLflow for results
 # Target: MAE < 2.0
 ```
 
 ### Step 3.5 — MLflow Experiments
-**What we did:** [TBD]
+**What we did:**
+- All 3 models log params, per-epoch metrics, and artifacts to MLflow
+- Using local file-based tracking (`mlruns/` directory)
+- Can compare experiments side by side in MLflow UI
 
-**Flow:** All 3 models log to MLflow → compare experiments → register best models → tag as "staging"
+**Flow:** All 3 models log to MLflow → compare experiments → view in UI
 
 **Run it yourself:**
 ```bash
-# Start MLflow UI
-poetry run mlflow ui --port 5000
+# Start MLflow UI (reads from local mlruns/ directory)
+poetry run mlflow ui --backend-store-uri file:./mlruns
 
 # Open http://localhost:5000
-# Compare all 3 model experiments side by side
-# Register best runs as model versions
+# 3 experiments: anomaly_detector, helpfulness_predictor, root_cause_classifier
 ```
 
 ---
@@ -383,11 +407,23 @@ poetry run mlflow ui --port 5000
 **Flow:** Review text → sentence-transformers → 384-dim vectors → ChromaDB → semantic search via FastAPI
 
 ### Step 4.1 — Generate Embeddings
-**What we did:** [TBD]
+**What we did:**
+- Used sentence-transformers (all-MiniLM-L6-v2) to generate 384-dim vectors for 50K reviews
+- Prioritized negative/mixed reviews (rating <= 3) since the use case is complaint analysis
+- Stored in ChromaDB (Docker) with cosine similarity index
+- Batch processing with skip-if-exists for resumability
+- Includes metadata per embedding: asin, rating, title
+
+**Why MiniLM, not a larger model:**
+- 5x faster than e5-large with 95% quality for similarity tasks
+- 384 dimensions keeps ChromaDB fast and storage low
+- Good enough for "find reviews similar to this complaint" — we're not doing cross-lingual retrieval
+
+**Flow:** 50K reviews → sentence-transformers encode → 384-dim vectors → ChromaDB collection
 
 **Run it yourself:**
 ```bash
-# Generate embeddings for all reviews and store in ChromaDB
+# Generate embeddings (takes ~20 min)
 poetry run python src/features/generate_embeddings.py
 
 # Verify ChromaDB has data
@@ -397,12 +433,19 @@ c = chromadb.HttpClient(host='localhost', port=8000)
 col = c.get_collection('review_embeddings')
 print(f'Embeddings stored: {col.count():,}')
 "
+# Expected: 50,000
 ```
 
 ### Step 4.2 — Semantic Search
-**What we did:** [TBD]
+**What we did:**
+- Built a semantic search module that encodes a natural language query and finds the most similar reviews in ChromaDB
+- Supports rating filters (e.g., only 1-2 star reviews)
+- Returns: review text, asin, rating, title, cosine distance
+- Lazy-loads model and collection (fast after first call)
 
-**Flow:** User query "bluetooth issues" → encode → ChromaDB similarity search → return top-K matching reviews
+**How to explain:** "Type 'bluetooth keeps disconnecting' and it finds the most semantically similar reviews — not keyword matching, but meaning matching. A review saying 'my headphones drop the wireless signal' would match even though it doesn't contain 'bluetooth' or 'disconnecting'."
+
+**Flow:** User query → encode with MiniLM → ChromaDB cosine search → top-K matching reviews
 
 **Run it yourself:**
 ```bash
@@ -411,7 +454,7 @@ poetry run python -c "
 from src.api.semantic_search import search_reviews
 results = search_reviews('bluetooth keeps disconnecting')
 for r in results[:3]:
-    print(r['text'][:100], '...')
+    print(f'[{r[\"rating\"]}] {r[\"text\"][:100]}...')
 "
 ```
 
@@ -422,13 +465,24 @@ for r in results[:3]:
 **Flow:** Training pairs → QLoRA fine-tune Mistral-7B → LLM-as-Judge evaluation → A/B test (base vs fine-tuned) → statistical significance
 
 ### Step 5.1 — Training Data
-**What we did:** [TBD]
+**What we did:**
+- Found 200 products with 30+ reviews each from PostgreSQL
+- For each product: pulled top 50 reviews (sorted by helpful_votes), formatted as structured input
+- Used Groq Llama 3.1 to generate an executive summary for each product's reviews
+- Summary format: overall sentiment, top 3 complaints with mention counts, key insights, recommendation
+- Output: 200 (input_reviews, summary) JSONL pairs for fine-tuning
+- Incremental saving every 10 products with resume support
 
-**Flow:** 200 products with 50+ reviews → group by complaint category → LLM generates structured summary → 1500 (input, summary) pairs
+**Why Groq for summary generation:**
+- Same free-tier approach as labeling — $0 cost
+- Summaries are "silver standard" — good enough to teach Mistral the format and style
+- The fine-tuned Mistral will then generalize to unseen products
+
+**Flow:** 200 products × 50 reviews each → Groq generates structured summary → JSONL training pairs
 
 **Run it yourself:**
 ```bash
-# Generate training pairs for fine-tuning
+# Generate training pairs (incremental, resumable)
 poetry run python src/data/create_summary_pairs.py
 # Output: data/processed/summary_training_pairs.jsonl
 ```

@@ -1,0 +1,14 @@
+{
+  "threshold": 0.21320179104804993,
+  "feature_cols": [
+    "daily_sentiment_avg",
+    "review_velocity",
+    "negative_ratio",
+    "complaint_keywords"
+  ],
+  "input_dim": 4,
+  "percentile": 95,
+  "epochs": 50,
+  "batch_size": 256,
+  "lr": 0.001
+}

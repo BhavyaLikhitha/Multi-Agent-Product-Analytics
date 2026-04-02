@@ -262,6 +262,7 @@ def log_to_mlflow(
     n_total: int,
 ):
     """Log params, metrics, and model artifact to MLflow."""
+    mlflow.set_tracking_uri("file:./mlruns")
     mlflow.set_experiment("anomaly_detector")
     with mlflow.start_run(run_name="autoencoder_train"):
         mlflow.log_params(

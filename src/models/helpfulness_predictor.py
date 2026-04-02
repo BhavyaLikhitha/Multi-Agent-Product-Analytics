@@ -304,6 +304,7 @@ def main():
     logger.info(f"Model architecture:\n{model}")
 
     # MLflow tracking
+    mlflow.set_tracking_uri("file:./mlruns")
     mlflow.set_experiment("helpfulness_predictor")
     with mlflow.start_run(run_name="feedforward_v1"):
         mlflow.log_params(

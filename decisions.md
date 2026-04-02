@@ -101,7 +101,31 @@ Every major decision made during this project, with reasoning. Reference this wh
 **Why:** Research shows diminishing returns beyond 3K for 5-category classification with DistilBERT. After 70/15/15 split: 2100 train, 450 val, 450 test — sufficient for Macro-F1 > 0.70 target.
 **Tradeoff:** More labels might squeeze out extra F1 points, but 2x the Groq time for marginal gain.
 
+### T7: [Step 3.2] — Class weights + threshold tuning for classifier
+**Decision:** Use inverse-frequency class weights in BCEWithLogitsLoss and tune decision threshold on val set (0.3-0.5 range).
+**Alternatives:** Oversample rare classes (SMOTE), collect more labels, use focal loss.
+**Why:** First run hit F1=0.67 (target 0.70). Shipping (171/3000 = 5.7%) and size (243/3000 = 8.1%) are rare — model under-predicts them. Class weights penalize missing rare categories more. Threshold tuning finds optimal cutoff per the val set instead of fixed 0.5.
+**Tradeoff:** Higher recall for rare classes may slightly reduce precision for defect (dominant class). Acceptable — macro F1 weights all classes equally so improving rare classes helps more than a small defect precision drop.
+
+### T8: [Step 3.2-3.4] — Local MLflow file tracking instead of server
+**Decision:** Use `mlflow.set_tracking_uri("file:./mlruns")` for local file-based tracking.
+**Alternatives:** Run MLflow server in Docker, use MLflow sqlite backend.
+**Why:** MLflow server wasn't running and adding another Docker container is unnecessary for development. File-based tracking works identically — can still view with `mlflow ui`.
+**Tradeoff:** No concurrent access or remote viewing. Fine for single-developer project.
+
 <!-- Copy this template for each technical decision during build:
+
+### T9: [Step 3.2] — Extra shipping labels to fix class imbalance
+**Decision:** Targeted 500 additional shipping-keyword reviews from PostgreSQL and labeled them with Groq. Merged into main training set (3000→3500 labels, shipping 171→344).
+**Alternatives:** Oversample existing shipping labels (SMOTE), synthetic data generation, accept lower F1.
+**Why:** Shipping had only 171 labels (5.7%) — too few for the model to learn. Instead of synthetic augmentation, we found real reviews mentioning shipping keywords and labeled them. Real data > synthetic data.
+**Tradeoff:** Used another Groq API key's daily limit. Worth it — classifier val F1 jumped from 0.69 to 0.7255.
+
+### T10: [Step 4.1] — 50K embeddings, negative-first priority
+**Decision:** Embed 50K reviews (rating <= 3) into ChromaDB using all-MiniLM-L6-v2 (384-dim vectors).
+**Alternatives:** Embed all 500K reviews, use a larger model (e5-large).
+**Why:** Semantic search is primarily used for finding complaint patterns — negative/mixed reviews matter most. 50K keeps ChromaDB fast and fits comfortably in Docker. MiniLM is 5x faster than larger models with 95% quality.
+**Tradeoff:** Positive reviews (4-5 stars) not searchable. Acceptable — the use case is complaint analysis, not positive review search.
 
 ### TN: [Step X.X] — [Decision title]
 **Decision:**
