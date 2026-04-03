@@ -27,6 +27,7 @@ from sqlalchemy.orm import DeclarativeBase
 load_dotenv()
 
 PAIRS_PATH = "data/processed/summary_training_pairs.jsonl"
+FINETUNED_PATH = "data/processed/finetuned_summaries.jsonl"
 RESULTS_PATH = "data/processed/evaluation_results.csv"
 
 JUDGE_PROMPT = (
@@ -127,6 +128,15 @@ def judge_summary(client, reviews_input, summary, max_retries=3):
     return {c: 3.0 for c in CRITERIA + ["overall_score"]}
 
 
+def load_finetuned_pairs():
+    """Load fine-tuned model summaries."""
+    pairs = []
+    with open(FINETUNED_PATH) as f:
+        for line in f:
+            pairs.append(json.loads(line))
+    return pairs
+
+
 def evaluate_model(
     model_name="groq_base",
     use_existing_summaries=True,
@@ -136,7 +146,10 @@ def evaluate_model(
     engine = get_engine()
     Base.metadata.create_all(engine)
 
-    pairs = load_pairs()
+    if model_name == "mistral_finetuned":
+        pairs = load_finetuned_pairs()
+    else:
+        pairs = load_pairs()
     logger.info(f"Evaluating {len(pairs)} summaries for model: {model_name}")
 
     # Resume support
@@ -210,4 +223,7 @@ def evaluate_model(
 
 
 if __name__ == "__main__":
-    evaluate_model(model_name="groq_base")
+    import sys
+
+    model = sys.argv[1] if len(sys.argv) > 1 else "groq_base"
+    evaluate_model(model_name=model)
