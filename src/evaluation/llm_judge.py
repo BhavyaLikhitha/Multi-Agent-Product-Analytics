@@ -150,6 +150,8 @@ def evaluate_model(
         pairs = load_finetuned_pairs()
     else:
         pairs = load_pairs()
+        # Only evaluate first 200 to match finetuned set
+        pairs = pairs[:200]
     logger.info(f"Evaluating {len(pairs)} summaries for model: {model_name}")
 
     # Resume support
