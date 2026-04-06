@@ -215,13 +215,29 @@ elif page == "Classifier Demo":
         "Paste any review text to classify its root cause."
     )
 
+    st.markdown("**Try these examples:**")
+    examples = {
+        "Defect": "The battery died after 2 weeks and the screen started flickering. Completely broken.",
+        "Shipping": "Package arrived damaged with missing parts. Box was crushed and the item was broken inside.",
+        "Description": "This looks nothing like the picture. The description said waterproof but it doesn't match at all. Misleading listing.",
+        "Size": "Way too small for what I expected. Doesn't fit at all. Wrong size compared to the listing.",
+        "Price": "Total waste of money. Overpriced garbage. You can find better for half the price. Scam.",
+        "Multiple": "The battery died after 2 weeks, screen is cracked, arrived damaged with missing parts. Total waste of money and doesn't match the description at all.",
+    }
+
+    selected_example = st.selectbox(
+        "Pick an example or type your own below",
+        ["Custom"] + list(examples.keys()),
+    )
+
+    default_text = ""
+    if selected_example != "Custom":
+        default_text = examples[selected_example]
+
     review_text = st.text_area(
         "Enter review text",
+        value=default_text,
         height=150,
-        placeholder=(
-            "e.g., The battery died after 2 weeks "
-            "and the screen is cracked..."
-        ),
     )
 
     if st.button("Classify") and review_text:
@@ -241,37 +257,71 @@ elif page == "Classifier Demo":
                 f"**Issues:** {', '.join(ner['issues']) or 'None'}"
             )
 
-            # Simple rule-based scoring
-            categories = {
-                "defect": [
-                    "broken", "defective", "dead",
-                    "stopped working", "malfunction",
-                ],
-                "shipping": [
-                    "arrived damaged", "missing parts",
-                    "wrong item", "late delivery",
-                ],
-                "description": [
-                    "misleading", "not as described",
-                    "false advertising",
-                ],
-                "size": [
-                    "too small", "too big",
-                    "doesn't fit", "wrong size",
-                ],
-                "price": [
-                    "waste of money", "overpriced",
-                    "rip off", "scam",
-                ],
+            # Score using NER issues matched to categories
+            defect_words = {
+                "broke", "broken", "cracked", "defective",
+                "faulty", "malfunction", "malfunctioning",
+                "dead", "died", "stopped working",
+                "not working", "doesn't work", "does not work",
+                "won't turn on", "won't charge", "overheating",
+                "overheat", "slow", "laggy", "freezing",
+                "crash", "crashed", "glitchy", "buggy",
+                "discharged", "drains", "unresponsive",
+            }
+            shipping_words = {
+                "arrived damaged", "arrived broken",
+                "missing parts", "wrong item", "wrong product",
+                "late delivery", "never arrived",
+                "incomplete", "damaged in transit",
+            }
+            desc_words = {
+                "misleading", "not as described",
+                "not as advertised", "false advertising",
+                "cheaply made", "cheap quality",
+                "poor quality", "low quality", "flimsy",
+                "looks nothing like",
+                "doesn't match", "does not match",
+                "different from", "different than",
+                "not what i expected", "not what was shown",
+                "nothing like the picture",
+                "description", "listing",
+            }
+            size_words = {
+                "too small", "too big", "too large",
+                "too tight", "doesn't fit", "does not fit",
+                "wrong size",
+            }
+            price_words = {
+                "waste of money", "overpriced",
+                "rip off", "ripoff", "scam",
+                "not worth", "worthless",
             }
 
             text_lower = review_text.lower()
-            scores = {}
-            for cat, keywords in categories.items():
-                score = sum(
-                    1 for k in keywords if k in text_lower
-                )
-                scores[cat] = min(1.0, score * 0.3)
+            issues = set(ner.get("issues", []))
+
+            scores = {"defect": 0.0, "shipping": 0.0,
+                       "description": 0.0, "size": 0.0,
+                       "price": 0.0}
+
+            for w in defect_words:
+                if w in text_lower or w in issues:
+                    scores["defect"] += 0.2
+            for w in shipping_words:
+                if w in text_lower or w in issues:
+                    scores["shipping"] += 0.2
+            for w in desc_words:
+                if w in text_lower or w in issues:
+                    scores["description"] += 0.2
+            for w in size_words:
+                if w in text_lower or w in issues:
+                    scores["size"] += 0.2
+            for w in price_words:
+                if w in text_lower or w in issues:
+                    scores["price"] += 0.2
+
+            for k in scores:
+                scores[k] = min(1.0, scores[k])
 
             st.subheader("Root Cause Classification")
             for cat, score in scores.items():
@@ -402,9 +452,18 @@ elif page == "Model Performance":
 
     # Drift monitoring
     st.subheader("Data Drift")
-    if os.path.exists("reports/drift_report.html"):
-        st.markdown(
-            "[Open Drift Report](reports/drift_report.html)"
+    report_path = "reports/drift_report.html"
+    if os.path.exists(report_path):
+        with open(report_path, "r", encoding="utf-8") as f:
+            html_content = f.read()
+        scaled_html = (
+            '<div style="transform: scale(0.7); '
+            'transform-origin: top left; '
+            'width: 143%; height: 143%;">'
+            f'{html_content}</div>'
+        )
+        st.components.v1.html(
+            scaled_html, height=1000, scrolling=True
         )
     else:
         st.info(
