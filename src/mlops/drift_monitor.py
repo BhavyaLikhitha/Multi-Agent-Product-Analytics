@@ -6,17 +6,11 @@ performance.
 """
 
 import os
-from datetime import datetime, timedelta
 
 import pandas as pd
 from dotenv import load_dotenv
-from evidently import ColumnMapping
-from evidently.metrics import (
-    ColumnDriftMetric,
-    DataDriftTable,
-    DatasetDriftMetric,
-)
-from evidently.report import Report
+from evidently import Dataset, DataDefinition, Report
+from evidently.presets import DataDriftPreset
 from loguru import logger
 from sqlalchemy import create_engine, text
 
@@ -82,24 +76,25 @@ def split_reference_current(df, split_pct=0.7):
 
 def run_drift_report(reference, current):
     """Generate Evidently drift report."""
-    column_mapping = ColumnMapping(
-        numerical_features=FEATURE_COLS
+    data_def = DataDefinition(
+        numerical_columns=FEATURE_COLS
     )
 
-    report = Report(
-        metrics=[
-            DatasetDriftMetric(),
-            DataDriftTable(),
-        ]
+    ref_dataset = Dataset.from_pandas(
+        reference[FEATURE_COLS],
+        data_definition=data_def,
+    )
+    cur_dataset = Dataset.from_pandas(
+        current[FEATURE_COLS],
+        data_definition=data_def,
     )
 
-    report.run(
-        reference_data=reference[FEATURE_COLS],
-        current_data=current[FEATURE_COLS],
-        column_mapping=column_mapping,
+    report = Report(metrics=[DataDriftPreset()])
+    snapshot = report.run(
+        reference_data=ref_dataset,
+        current_data=cur_dataset,
     )
-
-    return report
+    return snapshot
 
 
 def main():
@@ -113,7 +108,9 @@ def main():
     reference, current = split_reference_current(df)
 
     if reference.empty or current.empty:
-        logger.warning("Not enough data for drift check")
+        logger.warning(
+            "Not enough data for drift check"
+        )
         return
 
     report = run_drift_report(reference, current)
@@ -121,22 +118,7 @@ def main():
     os.makedirs("reports", exist_ok=True)
     report.save_html(REPORT_PATH)
     logger.info(f"Drift report saved to {REPORT_PATH}")
-
-    # Extract drift results
-    result = report.as_dict()
-    metrics = result.get("metrics", [])
-    for metric in metrics:
-        mr = metric.get("result", {})
-        if "drift_share" in mr:
-            drift_share = mr["drift_share"]
-            is_drifted = mr.get(
-                "dataset_drift", False
-            )
-            logger.info(
-                f"Dataset drift: {is_drifted} "
-                f"(drift share: {drift_share:.2%})"
-            )
-            break
+    logger.info("Open in browser to view results")
 
 
 if __name__ == "__main__":
