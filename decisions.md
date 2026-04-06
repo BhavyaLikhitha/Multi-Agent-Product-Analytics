@@ -127,6 +127,24 @@ Every major decision made during this project, with reasoning. Reference this wh
 **Why:** Semantic search is primarily used for finding complaint patterns — negative/mixed reviews matter most. 50K keeps ChromaDB fast and fits comfortably in Docker. MiniLM is 5x faster than larger models with 95% quality.
 **Tradeoff:** Positive reviews (4-5 stars) not searchable. Acceptable — the use case is complaint analysis, not positive review search.
 
+### T11: [Step 5.1] — Claude Sonnet for training data instead of Groq Llama 8B
+**Decision:** Regenerated 400 summary training pairs using Claude Sonnet instead of Groq Llama 3.1-8B.
+**Alternatives:** Groq Llama 3.1-70B (free), keep Llama 8B data, manual writing.
+**Why:** First fine-tuning attempt with Llama 8B data scored 3.12/5 (worse than base 3.37). Training data quality was the bottleneck. Claude Sonnet produces significantly better structured summaries. Cost: ~$4.20.
+**Tradeoff:** Used most of the $10 budget. Worth it — summary quality visibly improved (specific numbers, accurate sentiment, clean structure).
+
+### T12: [Step 5.2] — Lean QLoRA config for T4 memory
+**Decision:** Reduced LoRA rank from 16→8, target modules from 4→2 (q,v_proj only), batch size 2→1, added gradient checkpointing, 3→2 epochs.
+**Alternatives:** Use A100 ($10 Colab Pro), keep original config and risk OOM.
+**Why:** Original config OOM'd at epoch 8 after 5 hours on T4 (16GB). Lean config fits comfortably. Quality impact minimal — r=8 with q,v_proj is the standard QLoRA config from the original paper.
+**Tradeoff:** Slightly less model capacity. Negligible for structured summarization task.
+
+### T13: [Step 5.4] — A/B test showed no significant improvement
+**Decision:** Document as valid negative result rather than gaming the metrics.
+**Alternatives:** Use Claude as judge (might show different results), increase training data to 2000+, try different hyperparameters.
+**Why:** Fine-tuned (3.90/5) vs base (3.94/5) — no statistically significant difference (p=0.72). The pipeline is correct. The result is honest. With 400 training pairs and 2 epochs, Mistral-7B couldn't significantly outperform the base. In production: 2000+ human-verified pairs + stronger base model.
+**Tradeoff:** Two targets failed (A/B p-value, judge avg >4.0). Interview defense: "Not every experiment succeeds. I built the full evaluation pipeline to detect this. The 3 PyTorch models all passed."
+
 ### TN: [Step X.X] — [Decision title]
 **Decision:**
 **Alternatives:**
@@ -165,3 +183,12 @@ Every major decision made during this project, with reasoning. Reference this wh
 
 **"Why three separate models instead of one multi-task model?"**
 → "Each model solves a fundamentally different problem: anomaly detection is unsupervised, classification is supervised multi-label, helpfulness is regression. Different loss functions, different data, different evaluation metrics. A multi-task model adds coupling complexity for no real gain. In production, separate models are also easier to update independently."
+
+**"Your fine-tuned model didn't beat the base. Why?"**
+→ "With 400 training pairs and 2 epochs on a 7B model, the fine-tuning was too shallow to create a significant quality gap. The model learned the format but not substantially better content. In production, I'd use 2000+ human-verified training pairs, train longer, and use a stronger judge model. The important thing is I built the full pipeline — QLoRA fine-tuning, LLM-as-Judge evaluation, and statistical A/B testing — to detect this."
+
+**"Why use LangGraph instead of simple function chaining?"**
+→ "LangGraph gives us state management, conditional routing (skip rewriter if no mismatches), error handling per node, and a visual graph representation. Simple chaining works for a linear pipeline, but our pipeline has conditional logic — the auditor decides whether the rewriter runs. LangGraph makes this explicit and extensible."
+
+**"Why 4 agents instead of one big prompt?"**
+→ "Separation of concerns. Each agent has a focused job with clear inputs/outputs. The Analyzer doesn't need to know about listing rewriting. The Supervisor doesn't need to run NER. This makes each agent testable independently, debuggable, and replaceable. If we upgrade the rewriter to GPT-4, we change one file."
