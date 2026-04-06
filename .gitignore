@@ -10,6 +10,7 @@ build/
 .eggs/
 .venv/
 venv/
+ENV/
 .claude/
 CLAUDE.md
 # Virtual environments
@@ -42,15 +43,12 @@ data/processed/*
 !data/raw/.gitkeep
 !data/processed/.gitkeep
 
-# Model files (DVC-tracked)
-models/root_cause/*
-models/anomaly/*
-models/helpfulness/*
-models/mistral_finetuned/*
-!models/root_cause/.gitkeep
-!models/anomaly/.gitkeep
-!models/helpfulness/.gitkeep
-!models/mistral_finetuned/.gitkeep
+# Model artifacts
+models/root_cause_classifier/
+models/anomaly_detector/
+models/helpfulness_predictor/
+models/mistral-qlora/
+models/mistral-qlora-adapter/
 
 # DVC
 .dvc/cache/
@@ -59,6 +57,7 @@ models/mistral_finetuned/*
 # MLflow
 mlruns/
 mlartifacts/
+mlflow.db
 
 # Reports
 reports/
@@ -71,10 +70,11 @@ reports/
 Thumbs.db
 desktop.ini
 
-# Misc
+# Large binary files
 *.parquet
 *.pkl
 *.pt
 *.pth
 *.bin
 *.safetensors
+*.joblib
