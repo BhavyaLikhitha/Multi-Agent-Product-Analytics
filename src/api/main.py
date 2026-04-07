@@ -206,9 +206,7 @@ def search_reviews(
 ):
     """Semantic search over review embeddings."""
     try:
-        from src.api.semantic_search import (
-            search_reviews as _search,
-        )
+        from src.api.semantic_search import search_reviews as _search
 
         results = _search(
             query=q,

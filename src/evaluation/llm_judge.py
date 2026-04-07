@@ -13,14 +13,7 @@ import pandas as pd
 from dotenv import load_dotenv
 from groq import Groq
 from loguru import logger
-from sqlalchemy import (
-    Column,
-    Float,
-    Integer,
-    String,
-    Text,
-    create_engine,
-)
+from sqlalchemy import Column, Float, Integer, String, Text, create_engine
 from sqlalchemy.orm import DeclarativeBase
 
 load_dotenv()

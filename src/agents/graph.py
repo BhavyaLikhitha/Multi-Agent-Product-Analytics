@@ -18,7 +18,6 @@ from src.agents.auditor import audit_listing
 from src.agents.rewriter import rewrite_listing
 from src.agents.supervisor import supervise
 
-
 # ------------------------------------------------------------------
 # Shared state schema
 # ------------------------------------------------------------------

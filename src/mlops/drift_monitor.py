@@ -9,7 +9,7 @@ import os
 
 import pandas as pd
 from dotenv import load_dotenv
-from evidently import Dataset, DataDefinition, Report
+from evidently import DataDefinition, Dataset, Report
 from evidently.presets import DataDriftPreset
 from loguru import logger
 from sqlalchemy import create_engine, text

@@ -160,9 +160,7 @@ elif page == "Product Deep Dive":
         # NER analysis
         st.subheader("NER Analysis")
         try:
-            from src.features.ner_extractor import (
-                extract_batch_fast,
-            )
+            from src.features.ner_extractor import extract_batch_fast
 
             texts = reviews["text"].fillna("").tolist()
             ner_results = extract_batch_fast(texts)
@@ -242,9 +240,7 @@ elif page == "Classifier Demo":
 
     if st.button("Classify") and review_text:
         try:
-            from src.features.ner_extractor import (
-                extract_fast,
-            )
+            from src.features.ner_extractor import extract_fast
 
             ner = extract_fast(review_text)
 
@@ -389,9 +385,7 @@ elif page == "Semantic Search":
 
     if st.button("Search") and query:
         try:
-            from src.api.semantic_search import (
-                search_reviews,
-            )
+            from src.api.semantic_search import search_reviews
 
             results = search_reviews(
                 query=query,
