@@ -575,26 +575,10 @@ poetry run python src/evaluation/ab_test.py
 
 **Run it yourself:**
 ```bash
-# Run the full agent pipeline on a flagged product
-poetry run python -c "
-from src.agents.graph import run_pipeline
-result = run_pipeline(asin='B0EXAMPLE123')
-print(result['status'])           # 'pending_approval'
-print(result['rewritten_listing'][:200])
-"
-
-# Or run each agent individually for debugging:
-poetry run python -c "
-from src.agents.analyzer import analyze_product
-from src.agents.auditor import audit_listing
-from src.agents.rewriter import rewrite_listing
-
-analysis = analyze_product('B0EXAMPLE123')
-print(analysis['complaint_profile'])
-
-audit = audit_listing('B0EXAMPLE123', analysis)
-print(audit['mismatches'])
-"
+# Run the full agent pipeline on a real product
+poetry run python src/agents/graph.py
+# Uses B01G8JO5F2 (Senso Bluetooth Headphones, 5007 reviews)
+# Output: final_status + supervisor_notes
 ```
 
 ---
@@ -610,19 +594,25 @@ print(audit['mismatches'])
 - /search uses ChromaDB semantic search with rating filters
 - CORS enabled for Streamlit frontend
 
+**How to explain:** "The API is the glue between the ML models and the frontend. A product manager hits /analyze/B01G8JO5F2 and gets back: complaint profile, listing mismatches, rewritten listing, and approval status — all from one endpoint."
+
 ### Step 7.2 — GitHub Actions CI/CD
 **What we did:**
 - Runs on every push and PR to main
-- Spins up PostgreSQL service container
+- Spins up PostgreSQL service container for integration tests
 - Runs black, isort, flake8 linting
 - Runs pytest test suite
+
+**How to explain:** "Every push triggers automated quality checks. The CI spins up a real PostgreSQL container — not mocks — because we got burned once with mock/prod divergence. If linting or tests fail, the PR is blocked."
 
 ### Step 7.3 — Evidently Drift Monitoring
 **What we did:**
 - Splits product features into reference (70%) and current (30%) windows
-- Runs Evidently DataDriftPreset on 4 feature columns
-- Generates interactive HTML report embedded in dashboard
+- Runs Evidently DataDriftPreset on 4 feature columns (sentiment, velocity, negative ratio, complaints)
+- Generates interactive HTML report embedded in the dashboard
 - Result: No significant drift detected (1/4 columns drifted, below 50% threshold)
+
+**How to explain:** "Models degrade silently when input data distribution shifts. Evidently compares recent features against historical baselines. If drift is detected, it means reviews are changing in ways the model hasn't seen — time to retrain."
 
 **Run it yourself:**
 ```bash
@@ -648,11 +638,13 @@ poetry run python src/mlops/drift_monitor.py
 ### Step 8.1 — Streamlit Dashboard
 **What we did:**
 - 5 interactive pages:
-  1. **Quality Alerts** — filterable table of anomaly detector alerts (critical/warning)
-  2. **Product Deep Dive** — select any product, see reviews + NER components/issues breakdown
-  3. **Classifier Demo** — paste review text, see NER entities + root cause scores. Includes 6 example reviews.
-  4. **Semantic Search** — natural language search over 50K review embeddings with rating filter
-  5. **Model Performance** — metrics table, classifier report, LLM evaluation bar chart, embedded drift report
+  1. **Quality Alerts** — filterable table of anomaly detector alerts (critical/warning), severity metrics
+  2. **Product Deep Dive** — select any product from top 50, see reviews + NER components/issues breakdown
+  3. **Classifier Demo** — paste review text or pick from 6 examples, see NER entities + root cause scores
+  4. **Semantic Search** — natural language search over 50K review embeddings with rating slider filter
+  5. **Model Performance** — metrics table, per-category classifier report, LLM evaluation bar chart, embedded Evidently drift report
+
+**How to explain:** "The dashboard is what a product manager would use daily. They open it, see which products have quality alerts, drill into any product to understand the complaints, search for specific issues across all reviews, and monitor model health — all without touching code."
 
 **Run it yourself:**
 ```bash

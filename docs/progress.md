@@ -1,14 +1,14 @@
 # Progress Tracker — Multi-Agent Product Analytics with LLM Intelligence and Quality Monitoring
 
-## Last Updated: 2026-04-03
+## Last Updated: 2026-04-07
 
 ---
 
 ## Current Status
-- **Current Phase:** Phase 8 — Dashboard & Polish (nearly complete)
-- **Current Step:** Dashboard running, all pages working, drift report embedded
+- **Current Phase:** Phase 9 — Final Checks
+- **Current Step:** All code complete, documentation polished, CI/CD set up
 - **Blockers:** None
-- **Next Action:** Final commits, README polish, deploy
+- **Next Action:** Final CI green check, portfolio ready
 
 ---
 
@@ -23,8 +23,8 @@
 | Phase 5 | LLM Fine-tuning & Evaluation | ✅ Complete | 2026-04-01 | 2026-04-03 |
 | Phase 6 | Agentic AI (LangGraph) | ✅ Complete | 2026-04-02 | 2026-04-02 |
 | Phase 7 | API & CI/CD | ✅ Complete | 2026-04-02 | 2026-04-05 |
-| Phase 8 | Dashboard & Polish | 🟡 In Progress | 2026-04-05 | — |
-| Phase 9 | Final Checks | ⬜ Not Started | — | — |
+| Phase 8 | Dashboard & Polish | ✅ Complete | 2026-04-05 | 2026-04-07 |
+| Phase 9 | Final Checks | 🟡 In Progress | 2026-04-07 | — |
 
 ---
 
@@ -73,15 +73,15 @@
 
 ### Phase 8: Dashboard & Polish
 - [x] 8.1 — Streamlit dashboard (5 pages: Alerts, Product Deep Dive, Classifier Demo, Semantic Search, Model Performance)
-- [ ] 8.2 — Pre-compute demo data
-- [ ] 8.3 — README and documentation
+- [x] 8.2 — Pre-compute demo data (not needed — dashboard reads live from PostgreSQL + ChromaDB)
+- [x] 8.3 — README restructured for interview impact (problem statement, key results, features, project structure)
 - [ ] 8.4 — Demo video script
 - [ ] 8.5 — Deploy Streamlit
 
 ### Phase 9: Final Checks
-- [ ] 9.1 — Code quality
-- [ ] 9.2 — Documentation
-- [ ] 9.3 — Portfolio ready
+- [x] 9.1 — Code quality (black + isort + flake8 all passing)
+- [x] 9.2 — Documentation (README, WALKTHROUGH, decisions, progress all updated)
+- [ ] 9.3 — Portfolio ready (CI green, final push)
 
 ---
 
@@ -146,6 +146,21 @@
 - Document A/B result honestly — fine-tuning pipeline is correct, results show no significant improvement with 400 pairs
 - Interview talking point: "Pipeline works, experiment didn't show improvement — in production would use 2000+ human-verified pairs"
 **Next session starts at:** Streamlit dashboard, GitHub Actions, Evidently drift, final polish
+
+### Session 6 — 2026-04-05 / 2026-04-07
+**Steps completed:** 7.2 (GitHub Actions CI/CD), 7.3 (Evidently drift monitoring), 8.1 (Streamlit dashboard — 5 pages), 8.3 (README restructured), 9.1 (all lint passing), 9.2 (all docs updated)
+**Issues encountered:**
+- 11 files failed black formatting in CI — ran black on all files locally
+- flake8 caught unused imports and variables — fixed
+- Evidently API changed (v0.7.21) — updated imports, Report.run() returns Snapshot with save_html
+- Dashboard classifier demo showed 0% for all categories — expanded keyword lists
+- Drift report link showed blank page — embedded HTML directly in Streamlit via st.components.v1.html
+- torch DLL broke again after poetry add — reinstalled CPU version
+**Decisions made:**
+- Moved docs to docs/ folder for cleaner root
+- Embedded drift report in dashboard instead of linking
+- README restructured: problem statement + key results + features first (interview impact)
+**Next session starts at:** Final CI green check, project complete
 
 <!-- Copy this template for each new session:
 

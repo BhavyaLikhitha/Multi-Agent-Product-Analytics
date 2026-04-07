@@ -145,11 +145,17 @@ Every major decision made during this project, with reasoning. Reference this wh
 **Why:** Fine-tuned (3.90/5) vs base (3.94/5) — no statistically significant difference (p=0.72). The pipeline is correct. The result is honest. With 400 training pairs and 2 epochs, Mistral-7B couldn't significantly outperform the base. In production: 2000+ human-verified pairs + stronger base model.
 **Tradeoff:** Two targets failed (A/B p-value, judge avg >4.0). Interview defense: "Not every experiment succeeds. I built the full evaluation pipeline to detect this. The 3 PyTorch models all passed."
 
-### TN: [Step X.X] — [Decision title]
-**Decision:**
-**Alternatives:**
-**Why:**
-**Tradeoff:**
+### T14: [Step 7.3] — Evidently embedded in dashboard, not separate service
+**Decision:** Run Evidently drift check as a script, embed HTML report directly in Streamlit dashboard.
+**Alternatives:** Run Evidently as a separate monitoring service, use Grafana for drift visualization.
+**Why:** Separate monitoring service adds infrastructure complexity for a portfolio project. Embedding the report in the dashboard keeps everything in one place — a PM can see model metrics AND drift in the same UI.
+**Tradeoff:** No real-time drift alerting. Acceptable — drift checks run on-demand or scheduled, not continuously.
+
+### T15: [Step 8.1] — Rule-based classifier demo instead of live model inference
+**Decision:** Dashboard classifier demo uses keyword matching against NER patterns, not the actual DistilBERT model.
+**Alternatives:** Load DistilBERT model in Streamlit, call FastAPI /classify endpoint.
+**Why:** Loading DistilBERT in Streamlit doubles memory usage and adds 10s startup time. The keyword-based demo shows the same categories and is instant. The real model runs in the training/evaluation pipeline.
+**Tradeoff:** Demo scores are approximate (keyword-based), not exact model predictions. Made this explicit in the UI.
 
 -->
 
