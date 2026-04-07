@@ -39,14 +39,10 @@ app.add_middleware(
 def _get_engine():
     host = os.environ.get("POSTGRES_HOST", "localhost")
     port = os.environ.get("POSTGRES_PORT", "5432")
-    db = os.environ.get(
-        "POSTGRES_DB", "product_intelligence"
-    )
+    db = os.environ.get("POSTGRES_DB", "product_intelligence")
     user = os.environ.get("POSTGRES_USER", "postgres")
     pw = os.environ.get("POSTGRES_PASSWORD", "postgres")
-    return create_engine(
-        f"postgresql://{user}:{pw}@{host}:{port}/{db}"
-    )
+    return create_engine(f"postgresql://{user}:{pw}@{host}:{port}/{db}")
 
 
 engine = _get_engine()
@@ -100,9 +96,7 @@ def get_alerts(
     params["limit"] = limit
 
     with engine.connect() as conn:
-        rows = conn.execute(
-            text(query), params
-        ).mappings().all()
+        rows = conn.execute(text(query), params).mappings().all()
 
     return [dict(r) for r in rows]
 
@@ -111,14 +105,10 @@ def get_alerts(
 def get_alerts_for_product(asin: str):
     """Get alerts for a specific product."""
     query = text(
-        "SELECT * FROM alerts "
-        "WHERE product_id = :asin "
-        "ORDER BY detected_at DESC"
+        "SELECT * FROM alerts " "WHERE product_id = :asin " "ORDER BY detected_at DESC"
     )
     with engine.connect() as conn:
-        rows = conn.execute(
-            query, {"asin": asin}
-        ).mappings().all()
+        rows = conn.execute(query, {"asin": asin}).mappings().all()
 
     if not rows:
         raise HTTPException(
@@ -132,11 +122,7 @@ def get_alerts_for_product(asin: str):
 def classify_review(req: ClassifyRequest):
     """Classify a review into root cause categories."""
     try:
-        from src.features.ner_extractor import extract_fast
-
-        ner = extract_fast(req.text)
-
-        # Simple rule-based scoring from NER
+        # Simple rule-based scoring
         scores = {
             "defect": 0.0,
             "shipping": 0.0,
@@ -146,30 +132,43 @@ def classify_review(req: ClassifyRequest):
         }
 
         defect_words = {
-            "broken", "defective", "malfunction",
-            "dead", "stopped working", "not working",
-            "crashed", "overheating", "freezing",
+            "broken",
+            "defective",
+            "malfunction",
+            "dead",
+            "stopped working",
+            "not working",
+            "crashed",
+            "overheating",
+            "freezing",
         }
         shipping_words = {
-            "arrived damaged", "missing parts",
-            "wrong item", "late delivery",
+            "arrived damaged",
+            "missing parts",
+            "wrong item",
+            "late delivery",
             "never arrived",
         }
         desc_words = {
-            "misleading", "not as described",
-            "false advertising", "cheaply made",
+            "misleading",
+            "not as described",
+            "false advertising",
+            "cheaply made",
             "poor quality",
         }
         size_words = {
-            "too small", "too big", "doesn't fit",
+            "too small",
+            "too big",
+            "doesn't fit",
             "wrong size",
         }
         price_words = {
-            "waste of money", "overpriced", "rip off",
+            "waste of money",
+            "overpriced",
+            "rip off",
             "scam",
         }
 
-        issues = set(ner.get("issues", []))
         text_lower = req.text.lower()
 
         for w in defect_words:
@@ -196,9 +195,7 @@ def classify_review(req: ClassifyRequest):
 
     except Exception as e:
         logger.error(f"Classification failed: {e}")
-        raise HTTPException(
-            status_code=500, detail=str(e)
-        )
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/search")
@@ -221,9 +218,7 @@ def search_reviews(
         return results
     except Exception as e:
         logger.error(f"Search failed: {e}")
-        raise HTTPException(
-            status_code=500, detail=str(e)
-        )
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/analyze/{asin}")
@@ -240,23 +235,15 @@ def analyze_product(asin: str):
             "negative_pct": result.get("negative_pct"),
             "mismatches": result.get("mismatches", []),
             "audit_summary": result.get("audit_summary"),
-            "rewritten_title": result.get(
-                "rewritten_title"
-            ),
-            "rewritten_description": result.get(
-                "rewritten_description"
-            ),
+            "rewritten_title": result.get("rewritten_title"),
+            "rewritten_description": result.get("rewritten_description"),
             "changes_made": result.get("changes_made"),
             "final_status": result.get("final_status"),
-            "supervisor_notes": result.get(
-                "supervisor_notes"
-            ),
+            "supervisor_notes": result.get("supervisor_notes"),
         }
     except Exception as e:
         logger.error(f"Pipeline failed: {e}")
-        raise HTTPException(
-            status_code=500, detail=str(e)
-        )
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/products/top")
@@ -277,8 +264,6 @@ def top_products(limit: int = Query(default=20, le=100)):
         """
     )
     with engine.connect() as conn:
-        rows = conn.execute(
-            query, {"limit": limit}
-        ).mappings().all()
+        rows = conn.execute(query, {"limit": limit}).mappings().all()
 
     return [dict(r) for r in rows]

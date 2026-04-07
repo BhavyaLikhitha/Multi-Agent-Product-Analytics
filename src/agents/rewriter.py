@@ -41,12 +41,8 @@ def rewrite_listing(state: dict) -> dict:
         )
         state.update(
             {
-                "rewritten_title": state.get(
-                    "product_title", ""
-                ),
-                "rewritten_description": state.get(
-                    "product_description", ""
-                ),
+                "rewritten_title": state.get("product_title", ""),
+                "rewritten_description": state.get("product_description", ""),
                 "changes_made": [],
                 "status": "no_changes_needed",
             }
@@ -62,14 +58,11 @@ def rewrite_listing(state: dict) -> dict:
     client = Groq(api_key=os.environ["GROQ_API_KEY"])
 
     mismatch_text = "\n".join(
-        f"- [{m['severity']}] {m['complaint']}"
-        for m in mismatches
+        f"- [{m['severity']}] {m['complaint']}" for m in mismatches
     )
 
     top_issues = state.get("top_issues", [])
-    issues_text = ", ".join(
-        f"{iss} ({cnt}x)" for iss, cnt in top_issues[:5]
-    )
+    issues_text = ", ".join(f"{iss} ({cnt}x)" for iss, cnt in top_issues[:5])
 
     user_msg = (
         f"Current Title: {state.get('product_title', '')}\n"
@@ -101,27 +94,21 @@ def rewrite_listing(state: dict) -> dict:
         end = content.rfind("}") + 1
         if start >= 0 and end > start:
             result = json.loads(content[start:end])
-            rewritten_title = result.get(
-                "title", state.get("product_title", "")
-            )
+            rewritten_title = result.get("title", state.get("product_title", ""))
             rewritten_desc = result.get(
                 "description",
                 state.get("product_description", ""),
             )
             changes = result.get("changes", [])
         else:
-            rewritten_title = state.get(
-                "product_title", ""
-            )
+            rewritten_title = state.get("product_title", "")
             rewritten_desc = content
             changes = ["Full rewrite generated"]
 
     except Exception as e:
         logger.warning(f"Rewrite failed: {e}")
         rewritten_title = state.get("product_title", "")
-        rewritten_desc = state.get(
-            "product_description", ""
-        )
+        rewritten_desc = state.get("product_description", "")
         changes = [f"Rewrite failed: {e}"]
 
     state.update(
@@ -133,9 +120,7 @@ def rewrite_listing(state: dict) -> dict:
         }
     )
 
-    logger.info(
-        "Rewrite complete: {} changes", len(changes)
-    )
+    logger.info("Rewrite complete: {} changes", len(changes))
     return state
 
 

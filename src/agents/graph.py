@@ -7,7 +7,7 @@ Flow:
 
 from __future__ import annotations
 
-from typing import Any, List, Optional
+from typing import List, Optional
 
 from langgraph.graph import END, StateGraph
 from loguru import logger
@@ -22,6 +22,7 @@ from src.agents.supervisor import supervise
 # ------------------------------------------------------------------
 # Shared state schema
 # ------------------------------------------------------------------
+
 
 class PipelineState(TypedDict, total=False):
     """Union of all keys produced by every agent."""
@@ -56,6 +57,7 @@ class PipelineState(TypedDict, total=False):
 # ------------------------------------------------------------------
 # Node wrappers (thin adapters that catch errors)
 # ------------------------------------------------------------------
+
 
 def _analyzer_node(state: PipelineState) -> dict:
     logger.info(">>> Entering ANALYZER node")
@@ -93,15 +95,14 @@ def _supervisor_node(state: PipelineState) -> dict:
 # Conditional edge: skip rewriter when no mismatches
 # ------------------------------------------------------------------
 
+
 def _should_rewrite(state: PipelineState) -> str:
     """Return the next node name based on audit results."""
     mismatches = state.get("mismatches", [])
     status = state.get("status", "")
 
     if not mismatches or status == "no_changes_needed":
-        logger.info(
-            "No mismatches -- skipping rewriter"
-        )
+        logger.info("No mismatches -- skipping rewriter")
         return "supervisor"
 
     logger.info(
@@ -114,6 +115,7 @@ def _should_rewrite(state: PipelineState) -> str:
 # ------------------------------------------------------------------
 # Graph construction
 # ------------------------------------------------------------------
+
 
 def build_graph() -> StateGraph:
     """Build and return the (uncompiled) StateGraph."""
@@ -146,9 +148,7 @@ def build_graph() -> StateGraph:
 
 def run_pipeline(asin: str) -> dict:
     """Execute the full 4-agent pipeline for *asin*."""
-    logger.info(
-        "=== Starting pipeline for ASIN={} ===", asin
-    )
+    logger.info("=== Starting pipeline for ASIN={} ===", asin)
     graph = build_graph()
     app = graph.compile()
     result = app.invoke({"asin": asin})

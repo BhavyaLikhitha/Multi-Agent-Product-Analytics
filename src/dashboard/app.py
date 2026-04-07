@@ -21,14 +21,10 @@ load_dotenv()
 def get_engine():
     host = os.environ.get("POSTGRES_HOST", "localhost")
     port = os.environ.get("POSTGRES_PORT", "5432")
-    db = os.environ.get(
-        "POSTGRES_DB", "product_intelligence"
-    )
+    db = os.environ.get("POSTGRES_DB", "product_intelligence")
     user = os.environ.get("POSTGRES_USER", "postgres")
     pw = os.environ.get("POSTGRES_PASSWORD", "postgres")
-    return create_engine(
-        f"postgresql://{user}:{pw}@{host}:{port}/{db}"
-    )
+    return create_engine(f"postgresql://{user}:{pw}@{host}:{port}/{db}")
 
 
 engine = get_engine()
@@ -56,9 +52,7 @@ page = st.sidebar.radio(
 # ─── Page 1: Quality Alerts ───────────────────────────
 if page == "Quality Alerts":
     st.header("Quality Alerts")
-    st.markdown(
-        "Products flagged by the anomaly detection model."
-    )
+    st.markdown("Products flagged by the anomaly detection model.")
 
     severity = st.selectbox(
         "Filter by severity",
@@ -82,14 +76,10 @@ if page == "Quality Alerts":
 
             col1, col2 = st.columns(2)
             with col1:
-                critical = len(
-                    alerts[alerts["severity"] == "critical"]
-                )
+                critical = len(alerts[alerts["severity"] == "critical"])
                 st.metric("Critical", critical)
             with col2:
-                warning = len(
-                    alerts[alerts["severity"] == "warning"]
-                )
+                warning = len(alerts[alerts["severity"] == "warning"])
                 st.metric("Warning", warning)
 
             st.dataframe(
@@ -135,21 +125,17 @@ elif page == "Product Deep Dive":
         top_products["asin"].tolist(),
         format_func=lambda x: (
             f"{x} — "
-            f"{top_products[top_products['asin']==x]['title'].values[0] or 'Unknown'}"
-            f" ({top_products[top_products['asin']==x]['review_count'].values[0]} reviews)"
+            f"{top_products[top_products['asin']==x]['title'].values[0] or 'Unknown'}"  # noqa: E501
+            f" ({top_products[top_products['asin']==x]['review_count'].values[0]} reviews)"  # noqa: E501
         ),
     )
 
     if selected:
-        info = top_products[
-            top_products["asin"] == selected
-        ].iloc[0]
+        info = top_products[top_products["asin"] == selected].iloc[0]
         col1, col2, col3 = st.columns(3)
         col1.metric("Reviews", info["review_count"])
         col2.metric("Avg Rating", info["avg_rating"])
-        col3.metric(
-            "Product", str(info["title"])[:50]
-        )
+        col3.metric("Product", str(info["title"])[:50])
 
         reviews = pd.read_sql(
             text(
@@ -166,14 +152,10 @@ elif page == "Product Deep Dive":
         st.subheader("Top Reviews")
         for _, row in reviews.iterrows():
             with st.expander(
-                f"{'⭐' * int(row['rating'])} "
-                f"{row['title'] or 'No title'}"
+                f"{'⭐' * int(row['rating'])} " f"{row['title'] or 'No title'}"
             ):
                 st.write(row["text"])
-                st.caption(
-                    f"Helpful votes: "
-                    f"{row['helpful_votes']}"
-                )
+                st.caption(f"Helpful votes: " f"{row['helpful_votes']}")
 
         # NER analysis
         st.subheader("NER Analysis")
@@ -211,18 +193,36 @@ elif page == "Product Deep Dive":
 # ─── Page 3: Classifier Demo ─────────────────────────
 elif page == "Classifier Demo":
     st.header("Root Cause Classifier Demo")
-    st.markdown(
-        "Paste any review text to classify its root cause."
-    )
+    st.markdown("Paste any review text to classify its root cause.")
 
     st.markdown("**Try these examples:**")
     examples = {
-        "Defect": "The battery died after 2 weeks and the screen started flickering. Completely broken.",
-        "Shipping": "Package arrived damaged with missing parts. Box was crushed and the item was broken inside.",
-        "Description": "This looks nothing like the picture. The description said waterproof but it doesn't match at all. Misleading listing.",
-        "Size": "Way too small for what I expected. Doesn't fit at all. Wrong size compared to the listing.",
-        "Price": "Total waste of money. Overpriced garbage. You can find better for half the price. Scam.",
-        "Multiple": "The battery died after 2 weeks, screen is cracked, arrived damaged with missing parts. Total waste of money and doesn't match the description at all.",
+        "Defect": (
+            "The battery died after 2 weeks and the "
+            "screen started flickering. Completely broken."
+        ),
+        "Shipping": (
+            "Package arrived damaged with missing parts. "
+            "Box was crushed and the item was broken."
+        ),
+        "Description": (
+            "This looks nothing like the picture. "
+            "The description said waterproof but it "
+            "doesn't match at all. Misleading listing."
+        ),
+        "Size": (
+            "Way too small for what I expected. " "Doesn't fit at all. Wrong size."
+        ),
+        "Price": (
+            "Total waste of money. Overpriced garbage. "
+            "You can find better for half the price. Scam."
+        ),
+        "Multiple": (
+            "The battery died after 2 weeks, screen is "
+            "cracked, arrived damaged with missing parts. "
+            "Total waste of money and doesn't match "
+            "the description at all."
+        ),
     }
 
     selected_example = st.selectbox(
@@ -250,59 +250,100 @@ elif page == "Classifier Demo":
 
             st.subheader("NER Entities")
             col1, col2 = st.columns(2)
-            col1.write(
-                f"**Components:** {', '.join(ner['components']) or 'None'}"
-            )
-            col2.write(
-                f"**Issues:** {', '.join(ner['issues']) or 'None'}"
-            )
+            col1.write(f"**Components:** {', '.join(ner['components']) or 'None'}")
+            col2.write(f"**Issues:** {', '.join(ner['issues']) or 'None'}")
 
             # Score using NER issues matched to categories
             defect_words = {
-                "broke", "broken", "cracked", "defective",
-                "faulty", "malfunction", "malfunctioning",
-                "dead", "died", "stopped working",
-                "not working", "doesn't work", "does not work",
-                "won't turn on", "won't charge", "overheating",
-                "overheat", "slow", "laggy", "freezing",
-                "crash", "crashed", "glitchy", "buggy",
-                "discharged", "drains", "unresponsive",
+                "broke",
+                "broken",
+                "cracked",
+                "defective",
+                "faulty",
+                "malfunction",
+                "malfunctioning",
+                "dead",
+                "died",
+                "stopped working",
+                "not working",
+                "doesn't work",
+                "does not work",
+                "won't turn on",
+                "won't charge",
+                "overheating",
+                "overheat",
+                "slow",
+                "laggy",
+                "freezing",
+                "crash",
+                "crashed",
+                "glitchy",
+                "buggy",
+                "discharged",
+                "drains",
+                "unresponsive",
             }
             shipping_words = {
-                "arrived damaged", "arrived broken",
-                "missing parts", "wrong item", "wrong product",
-                "late delivery", "never arrived",
-                "incomplete", "damaged in transit",
+                "arrived damaged",
+                "arrived broken",
+                "missing parts",
+                "wrong item",
+                "wrong product",
+                "late delivery",
+                "never arrived",
+                "incomplete",
+                "damaged in transit",
             }
             desc_words = {
-                "misleading", "not as described",
-                "not as advertised", "false advertising",
-                "cheaply made", "cheap quality",
-                "poor quality", "low quality", "flimsy",
+                "misleading",
+                "not as described",
+                "not as advertised",
+                "false advertising",
+                "cheaply made",
+                "cheap quality",
+                "poor quality",
+                "low quality",
+                "flimsy",
                 "looks nothing like",
-                "doesn't match", "does not match",
-                "different from", "different than",
-                "not what i expected", "not what was shown",
+                "doesn't match",
+                "does not match",
+                "different from",
+                "different than",
+                "not what i expected",
+                "not what was shown",
                 "nothing like the picture",
-                "description", "listing",
+                "description",
+                "listing",
             }
             size_words = {
-                "too small", "too big", "too large",
-                "too tight", "doesn't fit", "does not fit",
+                "too small",
+                "too big",
+                "too large",
+                "too tight",
+                "doesn't fit",
+                "does not fit",
                 "wrong size",
             }
             price_words = {
-                "waste of money", "overpriced",
-                "rip off", "ripoff", "scam",
-                "not worth", "worthless",
+                "waste of money",
+                "overpriced",
+                "rip off",
+                "ripoff",
+                "scam",
+                "not worth",
+                "worthless",
             }
 
             text_lower = review_text.lower()
             issues = set(ner.get("issues", []))
 
-            scores = {"defect": 0.0, "shipping": 0.0,
-                       "description": 0.0, "size": 0.0,
-                       "price": 0.0}
+            scores = {
+                "defect": 0.0,
+                "shipping": 0.0,
+                "description": 0.0,
+                "size": 0.0,
+                "price": 0.0,
+            }
 
             for w in defect_words:
                 if w in text_lower or w in issues:
@@ -337,18 +378,14 @@ elif page == "Classifier Demo":
 # ─── Page 4: Semantic Search ─────────────────────────
 elif page == "Semantic Search":
     st.header("Semantic Search")
-    st.markdown(
-        "Search reviews by meaning, not just keywords."
-    )
+    st.markdown("Search reviews by meaning, not just keywords.")
 
     query = st.text_input(
         "Search query",
         placeholder="e.g., bluetooth keeps disconnecting",
     )
 
-    max_rating = st.slider(
-        "Max rating filter", 1.0, 5.0, 3.0, 0.5
-    )
+    max_rating = st.slider("Max rating filter", 1.0, 5.0, 3.0, 0.5)
 
     if st.button("Search") and query:
         try:
@@ -458,13 +495,11 @@ elif page == "Model Performance":
             html_content = f.read()
         scaled_html = (
             '<div style="transform: scale(0.7); '
-            'transform-origin: top left; '
+            "transform-origin: top left; "
             'width: 143%; height: 143%;">'
-            f'{html_content}</div>'
+            f"{html_content}</div>"
         )
-        st.components.v1.html(
-            scaled_html, height=1000, scrolling=True
-        )
+        st.components.v1.html(scaled_html, height=1000, scrolling=True)
     else:
         st.info(
             "Run `poetry run python src/mlops/drift_monitor.py` "

@@ -20,14 +20,10 @@ load_dotenv()
 def _get_engine():
     host = os.environ.get("POSTGRES_HOST", "localhost")
     port = os.environ.get("POSTGRES_PORT", "5432")
-    db = os.environ.get(
-        "POSTGRES_DB", "product_intelligence"
-    )
+    db = os.environ.get("POSTGRES_DB", "product_intelligence")
     user = os.environ.get("POSTGRES_USER", "postgres")
     pw = os.environ.get("POSTGRES_PASSWORD", "postgres")
-    return create_engine(
-        f"postgresql://{user}:{pw}@{host}:{port}/{db}"
-    )
+    return create_engine(f"postgresql://{user}:{pw}@{host}:{port}/{db}")
 
 
 def _fetch_reviews(engine, asin: str) -> list[dict]:
@@ -37,11 +33,7 @@ def _fetch_reviews(engine, asin: str) -> list[dict]:
         "ORDER BY timestamp DESC"
     )
     with engine.connect() as conn:
-        rows = (
-            conn.execute(query, {"asin": asin})
-            .mappings()
-            .all()
-        )
+        rows = conn.execute(query, {"asin": asin}).mappings().all()
     reviews = [dict(r) for r in rows]
     logger.info(
         "Fetched {} reviews for ASIN {}",
@@ -67,9 +59,7 @@ def analyze_product(state: dict) -> dict:
                 "negative_pct": 0.0,
                 "top_components": [],
                 "top_issues": [],
-                "complaint_profile": {
-                    "summary": "No reviews found."
-                },
+                "complaint_profile": {"summary": "No reviews found."},
             }
         )
         return state
@@ -80,10 +70,7 @@ def analyze_product(state: dict) -> dict:
     neg_count = sum(1 for r in ratings if r <= 2.0)
     negative_pct = (neg_count / review_count) * 100
 
-    texts = [
-        f"{r.get('title', '')} {r.get('text', '')}"
-        for r in reviews
-    ]
+    texts = [f"{r.get('title', '')} {r.get('text', '')}" for r in reviews]
     ner_results = extract_batch_fast(texts)
 
     comp_counter: Counter = Counter()
@@ -97,14 +84,8 @@ def analyze_product(state: dict) -> dict:
     top_components = comp_counter.most_common(10)
     top_issues = issue_counter.most_common(10)
 
-    comp_lines = [
-        f"  - {c} ({n} mentions)"
-        for c, n in top_components[:5]
-    ]
-    issue_lines = [
-        f"  - {i} ({n} mentions)"
-        for i, n in top_issues[:5]
-    ]
+    comp_lines = [f"  - {c} ({n} mentions)" for c, n in top_components[:5]]
+    issue_lines = [f"  - {i} ({n} mentions)" for i, n in top_issues[:5]]
 
     summary = (
         f"Product has {review_count} reviews "

@@ -29,14 +29,10 @@ REPORT_PATH = "reports/drift_report.html"
 def get_engine():
     host = os.environ.get("POSTGRES_HOST", "localhost")
     port = os.environ.get("POSTGRES_PORT", "5432")
-    db = os.environ.get(
-        "POSTGRES_DB", "product_intelligence"
-    )
+    db = os.environ.get("POSTGRES_DB", "product_intelligence")
     user = os.environ.get("POSTGRES_USER", "postgres")
     pw = os.environ.get("POSTGRES_PASSWORD", "postgres")
-    return create_engine(
-        f"postgresql://{user}:{pw}@{host}:{port}/{db}"
-    )
+    return create_engine(f"postgresql://{user}:{pw}@{host}:{port}/{db}")
 
 
 def load_features(engine):
@@ -63,22 +59,14 @@ def split_reference_current(df, split_pct=0.7):
     reference = df[df["date"] < split_date]
     current = df[df["date"] >= split_date]
 
-    logger.info(
-        f"Reference: {len(reference):,} rows "
-        f"(before {split_date.date()})"
-    )
-    logger.info(
-        f"Current: {len(current):,} rows "
-        f"(after {split_date.date()})"
-    )
+    logger.info(f"Reference: {len(reference):,} rows " f"(before {split_date.date()})")
+    logger.info(f"Current: {len(current):,} rows " f"(after {split_date.date()})")
     return reference, current
 
 
 def run_drift_report(reference, current):
     """Generate Evidently drift report."""
-    data_def = DataDefinition(
-        numerical_columns=FEATURE_COLS
-    )
+    data_def = DataDefinition(numerical_columns=FEATURE_COLS)
 
     ref_dataset = Dataset.from_pandas(
         reference[FEATURE_COLS],
@@ -108,9 +96,7 @@ def main():
     reference, current = split_reference_current(df)
 
     if reference.empty or current.empty:
-        logger.warning(
-            "Not enough data for drift check"
-        )
+        logger.warning("Not enough data for drift check")
         return
 
     report = run_drift_report(reference, current)

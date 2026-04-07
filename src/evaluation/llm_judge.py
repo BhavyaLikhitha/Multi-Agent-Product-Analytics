@@ -20,7 +20,6 @@ from sqlalchemy import (
     String,
     Text,
     create_engine,
-    text,
 )
 from sqlalchemy.orm import DeclarativeBase
 
@@ -74,9 +73,7 @@ def get_engine():
     db = os.environ.get("POSTGRES_DB", "product_intelligence")
     user = os.environ.get("POSTGRES_USER", "postgres")
     pw = os.environ.get("POSTGRES_PASSWORD", "postgres")
-    return create_engine(
-        f"postgresql://{user}:{pw}@{host}:{port}/{db}"
-    )
+    return create_engine(f"postgresql://{user}:{pw}@{host}:{port}/{db}")
 
 
 def load_pairs():
@@ -91,8 +88,7 @@ def load_pairs():
 def judge_summary(client, reviews_input, summary, max_retries=3):
     """Score a summary using LLM judge."""
     user_msg = (
-        f"REVIEWS:\n{reviews_input[:2000]}\n\n"
-        f"SUMMARY TO EVALUATE:\n{summary}"
+        f"REVIEWS:\n{reviews_input[:2000]}\n\n" f"SUMMARY TO EVALUATE:\n{summary}"
     )
 
     for attempt in range(max_retries):
@@ -115,9 +111,9 @@ def judge_summary(client, reviews_input, summary, max_retries=3):
                 for c in CRITERIA:
                     val = scores.get(c, 3)
                     result[c] = max(1, min(5, float(val)))
-                result["overall_score"] = sum(
-                    result[c] for c in CRITERIA
-                ) / len(CRITERIA)
+                result["overall_score"] = sum(result[c] for c in CRITERIA) / len(
+                    CRITERIA
+                )
                 return result
         except Exception as e:
             if attempt < max_retries - 1:
@@ -186,9 +182,7 @@ def evaluate_model(
         done = len(done_asins) + len(rows)
         if done % 20 == 0:
             new_df = pd.DataFrame(rows)
-            combined = pd.concat(
-                [existing, new_df], ignore_index=True
-            )
+            combined = pd.concat([existing, new_df], ignore_index=True)
             combined.to_csv(RESULTS_PATH, index=False)
             existing = combined
             rows = []
@@ -199,17 +193,13 @@ def evaluate_model(
 
     if rows:
         new_df = pd.DataFrame(rows)
-        combined = pd.concat(
-            [existing, new_df], ignore_index=True
-        )
+        combined = pd.concat([existing, new_df], ignore_index=True)
         combined.to_csv(RESULTS_PATH, index=False)
 
     # Store in PostgreSQL
     final = pd.read_csv(RESULTS_PATH)
     model_results = final[final["model_name"] == model_name]
-    model_results.to_sql(
-        "evaluations", engine, if_exists="append", index=False
-    )
+    model_results.to_sql("evaluations", engine, if_exists="append", index=False)
 
     # Print summary
     logger.info(f"\n=== {model_name} Evaluation Results ===")

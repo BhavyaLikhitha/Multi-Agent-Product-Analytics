@@ -43,9 +43,7 @@ def run_ab_test(
         return
 
     base = base[base["asin"].isin(common)].sort_values("asin")
-    finetuned = finetuned[
-        finetuned["asin"].isin(common)
-    ].sort_values("asin")
+    finetuned = finetuned[finetuned["asin"].isin(common)].sort_values("asin")
 
     logger.info(f"Comparing {len(common)} products")
     logger.info(f"  Base model: {base_model}")
@@ -69,9 +67,7 @@ def run_ab_test(
         diff = ft_mean - base_mean
 
         # Two-sample t-test
-        t_stat, p_value = stats.ttest_ind(
-            ft_scores, base_scores, alternative="greater"
-        )
+        t_stat, p_value = stats.ttest_ind(ft_scores, base_scores, alternative="greater")
 
         sig = "YES" if p_value < 0.05 else "no"
         if p_value < 0.05:
@@ -83,10 +79,7 @@ def run_ab_test(
         )
 
     print("-" * 55)
-    print(
-        f"\nSignificant improvements: "
-        f"{significant_count}/{len(CRITERIA)}"
-    )
+    print(f"\nSignificant improvements: " f"{significant_count}/{len(CRITERIA)}")
 
     target = significant_count >= 2
     status = "PASS" if target else "FAIL"

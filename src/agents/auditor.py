@@ -16,14 +16,10 @@ load_dotenv()
 def _get_engine():
     host = os.environ.get("POSTGRES_HOST", "localhost")
     port = os.environ.get("POSTGRES_PORT", "5432")
-    db = os.environ.get(
-        "POSTGRES_DB", "product_intelligence"
-    )
+    db = os.environ.get("POSTGRES_DB", "product_intelligence")
     user = os.environ.get("POSTGRES_USER", "postgres")
     pw = os.environ.get("POSTGRES_PASSWORD", "postgres")
-    return create_engine(
-        f"postgresql://{user}:{pw}@{host}:{port}/{db}"
-    )
+    return create_engine(f"postgresql://{user}:{pw}@{host}:{port}/{db}")
 
 
 def _fetch_product(engine, asin: str) -> dict:
@@ -33,9 +29,7 @@ def _fetch_product(engine, asin: str) -> dict:
         "LIMIT 1"
     )
     with engine.connect() as conn:
-        row = conn.execute(
-            query, {"asin": asin}
-        ).mappings().first()
+        row = conn.execute(query, {"asin": asin}).mappings().first()
     if row:
         return dict(row)
     # Try direct asin match
@@ -47,9 +41,7 @@ def _fetch_product(engine, asin: str) -> dict:
         "LIMIT 1"
     )
     with engine.connect() as conn:
-        row = conn.execute(
-            query2, {"asin": asin}
-        ).mappings().first()
+        row = conn.execute(query2, {"asin": asin}).mappings().first()
     return dict(row) if row else {}
 
 
@@ -66,21 +58,12 @@ def _find_mismatches(
         if comp.lower() in listing_lower and count >= 5:
             # Component mentioned in listing AND
             # frequently complained about
-            related_issues = [
-                iss
-                for iss, _ in top_issues
-                if comp.lower() in iss.lower()
-                or iss.lower() in comp.lower()
-            ]
             severity = "high" if count >= 20 else "medium"
             mismatches.append(
                 {
-                    "claim": (
-                        f"Listing mentions '{comp}'"
-                    ),
+                    "claim": (f"Listing mentions '{comp}'"),
                     "complaint": (
-                        f"{count} reviews mention "
-                        f"'{comp}' in complaints"
+                        f"{count} reviews mention " f"'{comp}' in complaints"
                     ),
                     "severity": severity,
                 }
@@ -88,16 +71,11 @@ def _find_mismatches(
 
     for issue, count in top_issues:
         if count >= 10:
-            severity = "high" if count >= 30 else (
-                "medium" if count >= 15 else "low"
-            )
+            severity = "high" if count >= 30 else ("medium" if count >= 15 else "low")
             mismatches.append(
                 {
                     "claim": "Listing does not address",
-                    "complaint": (
-                        f"'{issue}' mentioned in "
-                        f"{count} reviews"
-                    ),
+                    "complaint": (f"'{issue}' mentioned in " f"{count} reviews"),
                     "severity": severity,
                 }
             )
@@ -122,32 +100,19 @@ def audit_listing(state: dict) -> dict:
     top_components = state.get("top_components", [])
     top_issues = state.get("top_issues", [])
 
-    mismatches = _find_mismatches(
-        listing_text, top_components, top_issues
-    )
+    mismatches = _find_mismatches(listing_text, top_components, top_issues)
 
     # Build audit summary
     if mismatches:
-        high = sum(
-            1 for m in mismatches
-            if m["severity"] == "high"
-        )
-        med = sum(
-            1 for m in mismatches
-            if m["severity"] == "medium"
-        )
-        low = sum(
-            1 for m in mismatches
-            if m["severity"] == "low"
-        )
+        high = sum(1 for m in mismatches if m["severity"] == "high")
+        med = sum(1 for m in mismatches if m["severity"] == "medium")
+        low = sum(1 for m in mismatches if m["severity"] == "low")
         audit_summary = (
             f"Found {len(mismatches)} mismatches: "
             f"{high} high, {med} medium, {low} low."
         )
     else:
-        audit_summary = (
-            "No significant mismatches found."
-        )
+        audit_summary = "No significant mismatches found."
 
     state.update(
         {

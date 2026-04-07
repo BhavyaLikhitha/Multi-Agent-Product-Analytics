@@ -27,8 +27,7 @@ def supervise(state: dict) -> dict:
     mismatches: list[dict] = state.get("mismatches", [])
 
     logger.info(
-        "Supervisor reviewing ASIN={} | status={} | "
-        "mismatches={}",
+        "Supervisor reviewing ASIN={} | status={} | " "mismatches={}",
         asin,
         status,
         len(mismatches),
@@ -44,9 +43,7 @@ def supervise(state: dict) -> dict:
     # Rule 2 — too many changes for auto-approval
     if len(mismatches) > 5:
         state["final_status"] = "needs_review"
-        state["supervisor_notes"] = (
-            "Too many changes, needs human review"
-        )
+        state["supervisor_notes"] = "Too many changes, needs human review"
         logger.warning(
             "ASIN={} → needs_review ({} mismatches)",
             asin,
@@ -55,29 +52,22 @@ def supervise(state: dict) -> dict:
         return state
 
     # Rule 3 & 4 — severity-based decision
-    severities = [
-        m.get("severity", "low") for m in mismatches
-    ]
+    severities = [m.get("severity", "low") for m in mismatches]
     has_high = any(s == "high" for s in severities)
     all_low = all(s == "low" for s in severities)
 
     if all_low:
         state["final_status"] = "approved"
-        state["supervisor_notes"] = (
-            "All mismatches are low severity — auto-approved"
-        )
+        state["supervisor_notes"] = "All mismatches are low severity — auto-approved"
         logger.info("ASIN={} → approved (all low)", asin)
         return state
 
     if has_high:
         state["final_status"] = "needs_review"
         state["supervisor_notes"] = (
-            "High severity mismatch detected — "
-            "requires human review"
+            "High severity mismatch detected — " "requires human review"
         )
-        logger.warning(
-            "ASIN={} → needs_review (high severity)", asin
-        )
+        logger.warning("ASIN={} → needs_review (high severity)", asin)
         return state
 
     # Rule 5 — fallback
