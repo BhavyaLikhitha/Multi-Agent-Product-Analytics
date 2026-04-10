@@ -1,0 +1,33 @@
+{
+  "dataset_drift_detected": false,
+  "drift_threshold": 0.5,
+  "total_columns": 4,
+  "drifted_columns": 1,
+  "drift_share": 0.25,
+  "columns": [
+    {
+      "name": "review_velocity",
+      "drift_detected": true,
+      "drift_score": 0.128889,
+      "stattest": "Wasserstein distance (normed)"
+    },
+    {
+      "name": "negative_ratio",
+      "drift_detected": false,
+      "drift_score": 0.062229,
+      "stattest": "Wasserstein distance (normed)"
+    },
+    {
+      "name": "daily_sentiment_avg",
+      "drift_detected": false,
+      "drift_score": 0.039158,
+      "stattest": "Wasserstein distance (normed)"
+    },
+    {
+      "name": "complaint_keywords",
+      "drift_detected": false,
+      "drift_score": 0.035203,
+      "stattest": "Wasserstein distance (normed)"
+    }
+  ]
+}
