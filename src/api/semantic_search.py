@@ -65,7 +65,7 @@ def _encode_query(query: str) -> list[float]:
             "https://router.huggingface.co/hf-inference/models/"
             "sentence-transformers/all-MiniLM-L6-v2",
             headers=headers,
-            json={"inputs": query, "options": {"wait_for_model": True}},
+            json={"inputs": query},
             timeout=30,
         )
         resp.raise_for_status()
