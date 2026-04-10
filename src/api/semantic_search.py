@@ -1,18 +1,17 @@
-"""Semantic search over review embeddings in ChromaDB."""
+"""Semantic search over review embeddings in Pinecone."""
 
 import os
 
-import chromadb
 from dotenv import load_dotenv
+from pinecone import Pinecone
 from sentence_transformers import SentenceTransformer
 
 load_dotenv()
 
 MODEL_NAME = "all-MiniLM-L6-v2"
-COLLECTION_NAME = "review_embeddings"
 
 _model = None
-_collection = None
+_index = None
 
 
 def _get_model():
@@ -22,14 +21,17 @@ def _get_model():
     return _model
 
 
-def _get_collection():
-    global _collection
-    if _collection is None:
-        host = os.environ.get("CHROMA_HOST", "localhost")
-        port = int(os.environ.get("CHROMA_PORT", "8000"))
-        client = chromadb.HttpClient(host=host, port=port)
-        _collection = client.get_collection(name=COLLECTION_NAME)
-    return _collection
+def _get_index():
+    global _index
+    if _index is None:
+        pc = Pinecone(
+            api_key=os.environ["PINECONE_API_KEY"]
+        )
+        index_name = os.environ.get(
+            "PINECONE_INDEX", "review-embeddings"
+        )
+        _index = pc.Index(index_name)
+    return _index
 
 
 def search_reviews(
@@ -38,54 +40,44 @@ def search_reviews(
     min_rating: float = None,
     max_rating: float = None,
 ) -> list[dict]:
-    """Search reviews by semantic similarity.
-
-    Args:
-        query: Natural language search query
-        n_results: Number of results to return
-        min_rating: Filter by minimum rating
-        max_rating: Filter by maximum rating
-
-    Returns:
-        List of dicts with keys: id, text, asin,
-        rating, title, distance
-    """
+    """Search reviews by semantic similarity."""
     model = _get_model()
-    collection = _get_collection()
+    index = _get_index()
 
     query_embedding = model.encode(query).tolist()
 
-    # Build where filter
-    where = None
+    # Build filter
+    pc_filter = {}
     if min_rating is not None and max_rating is not None:
-        where = {
+        pc_filter = {
             "$and": [
                 {"rating": {"$gte": min_rating}},
                 {"rating": {"$lte": max_rating}},
             ]
         }
     elif min_rating is not None:
-        where = {"rating": {"$gte": min_rating}}
+        pc_filter = {"rating": {"$gte": min_rating}}
     elif max_rating is not None:
-        where = {"rating": {"$lte": max_rating}}
+        pc_filter = {"rating": {"$lte": max_rating}}
 
-    results = collection.query(
-        query_embeddings=[query_embedding],
-        n_results=n_results,
-        where=where,
-        include=["documents", "metadatas", "distances"],
+    results = index.query(
+        vector=query_embedding,
+        top_k=n_results,
+        filter=pc_filter if pc_filter else None,
+        include_metadata=True,
     )
 
     reviews = []
-    for i in range(len(results["ids"][0])):
+    for match in results.get("matches", []):
+        meta = match.get("metadata", {})
         reviews.append(
             {
-                "id": results["ids"][0][i],
-                "text": results["documents"][0][i],
-                "asin": results["metadatas"][0][i]["asin"],
-                "rating": results["metadatas"][0][i]["rating"],
-                "title": results["metadatas"][0][i]["title"],
-                "distance": results["distances"][0][i],
+                "id": match["id"],
+                "text": meta.get("text", ""),
+                "asin": meta.get("asin", ""),
+                "rating": meta.get("rating", 0),
+                "title": meta.get("title", ""),
+                "distance": 1 - match["score"],
             }
         )
 
@@ -93,7 +85,11 @@ def search_reviews(
 
 
 if __name__ == "__main__":
-    # Quick test
-    results = search_reviews("bluetooth keeps disconnecting", n_results=5)
+    results = search_reviews(
+        "bluetooth keeps disconnecting", n_results=5
+    )
     for r in results:
-        print(f"[{r['rating']}] {r['text'][:100]}... " f"(dist={r['distance']:.3f})")
+        print(
+            f"[{r['rating']}] {r['text'][:100]}... "
+            f"(sim={1 - r['distance']:.3f})"
+        )
