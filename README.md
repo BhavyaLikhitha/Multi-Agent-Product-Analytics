@@ -1,4 +1,4 @@
-# 🤖📊 Multi-Agent Product Analytics with LLM Intelligence & Quality Monitoring 🔍
+## 🤖 Multi-Agent Product Analytics with LLM Intelligence & Quality Monitoring 🔍
 
 ### An End-to-End ML/AI Platform for E-Commerce Review Intelligence
 
