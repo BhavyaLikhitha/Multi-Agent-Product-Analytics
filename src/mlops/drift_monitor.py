@@ -104,6 +104,60 @@ def main():
     os.makedirs("reports", exist_ok=True)
     report.save_html(REPORT_PATH)
     logger.info(f"Drift report saved to {REPORT_PATH}")
+
+    # Save lightweight JSON summary for cloud dashboard
+    import json as _json
+    import re as _re
+
+    with open(REPORT_PATH, "r", encoding="utf-8") as f:
+        html = f.read()
+    match = _re.search(r"var metric_\w+ = (\{.*)", html)
+    if match:
+        raw = match.group(1)
+        # Find valid JSON end
+        for end in range(len(raw), 0, -1):
+            try:
+                parsed = _json.loads(raw[:end])
+                break
+            except _json.JSONDecodeError:
+                continue
+        else:
+            parsed = None
+
+        if parsed:
+            widgets = parsed.get("widgets", [{}])[0].get("widgets", [])
+            summary = {"dataset_drift_detected": False, "drift_threshold": 0.5,
+                       "total_columns": 0, "drifted_columns": 0,
+                       "drift_share": 0.0, "columns": []}
+            for w in widgets:
+                counters = w.get("params", {}).get("counters", [])
+                for c in counters:
+                    if "NOT detected" in c.get("label", ""):
+                        summary["dataset_drift_detected"] = False
+                    elif "IS detected" in c.get("label", ""):
+                        summary["dataset_drift_detected"] = True
+                data_rows = w.get("params", {}).get("data", [])
+                for row in data_rows:
+                    summary["columns"].append({
+                        "name": row.get("column_name", ""),
+                        "drift_detected": row.get("data_drift") == "Detected",
+                        "drift_score": row.get("drift_score", 0),
+                        "stattest": row.get("stattest_name", ""),
+                    })
+            summary["total_columns"] = len(summary["columns"])
+            summary["drifted_columns"] = sum(
+                1 for c in summary["columns"] if c["drift_detected"]
+            )
+            if summary["total_columns"] > 0:
+                summary["drift_share"] = (
+                    summary["drifted_columns"] / summary["total_columns"]
+                )
+
+            summary_path = REPORT_PATH.replace(".html", "_summary.json")
+            with open(summary_path, "w") as f:
+                _json.dump(summary, f, indent=2)
+            logger.info(f"Drift summary saved to {summary_path}")
+
     logger.info("Open in browser to view results")
 
 

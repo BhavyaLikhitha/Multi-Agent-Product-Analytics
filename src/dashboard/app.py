@@ -966,9 +966,11 @@ def page_performance():
 
     # Drift monitoring
     render_section_divider("DATA DRIFT MONITORING")
-    report_path = os.path.join(_ROOT, "reports", "drift_report.html")
-    if os.path.exists(report_path):
-        with open(report_path, "r", encoding="utf-8") as f:
+    report_html = os.path.join(_ROOT, "reports", "drift_report.html")
+    summary_json = os.path.join(_ROOT, "reports", "drift_summary.json")
+
+    if os.path.exists(report_html):
+        with open(report_html, "r", encoding="utf-8") as f:
             html_content = f.read()
         scaled_html = (
             '<div style="transform:scale(0.65);'
@@ -977,6 +979,58 @@ def page_performance():
             f"{html_content}</div>"
         )
         st.components.v1.html(scaled_html, height=900, scrolling=True)
+    elif os.path.exists(summary_json):
+        import json as _json
+
+        with open(summary_json, "r") as f:
+            drift = _json.load(f)
+
+        drift_detected = drift["dataset_drift_detected"]
+        status_badge = (
+            badge("DRIFT DETECTED", "badge-red")
+            if drift_detected
+            else badge("NO DATASET DRIFT", "badge-green")
+        )
+
+        render_metric_cards(
+            [
+                {
+                    "label": "Dataset Drift",
+                    "value": status_badge,
+                    "delta": f"Threshold: {drift['drift_threshold']}",
+                },
+                {
+                    "label": "Columns Analyzed",
+                    "value": str(drift["total_columns"]),
+                    "delta": f"{drift['drifted_columns']} drifted",
+                },
+                {
+                    "label": "Drift Share",
+                    "value": f"{drift['drift_share']:.0%}",
+                    "delta": "of columns drifted",
+                    "color": "#dc2626" if drift["drift_share"] > 0.5 else "#d97706",
+                },
+            ]
+        )
+
+        tbl_rows = []
+        for col in drift["columns"]:
+            d = col["drift_detected"]
+            d_badge = badge("Detected", "badge-red") if d else badge("Not Detected", "badge-green")
+            score = f"{col['drift_score']:.4f}"
+            tbl_rows.append(
+                [
+                    f'<span style="font-weight:600">{col["name"]}</span>',
+                    d_badge,
+                    mono(score),
+                    col["stattest"],
+                ]
+            )
+
+        render_table(
+            ["Feature", "Drift Status", "Score", "Statistical Test"],
+            tbl_rows,
+        )
     else:
         st.info(
             "Drift report not found. "

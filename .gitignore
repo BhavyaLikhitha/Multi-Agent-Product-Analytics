@@ -63,7 +63,8 @@ mlartifacts/
 mlflow.db
 
 # Reports
-reports/
+reports/*
+!reports/drift_summary.json
 
 # Docker
 *.log

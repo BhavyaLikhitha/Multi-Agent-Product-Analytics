@@ -56,9 +56,15 @@ def _encode_query(query: str) -> list[float]:
     except ImportError:
         import requests
 
+        headers = {}
+        hf_token = _get_secret("HF_TOKEN")
+        if hf_token:
+            headers["Authorization"] = f"Bearer {hf_token}"
+
         resp = requests.post(
-            "https://api-inference.huggingface.co/pipeline/feature-extraction/"
+            "https://router.huggingface.co/hf-inference/models/"
             "sentence-transformers/all-MiniLM-L6-v2",
+            headers=headers,
             json={"inputs": query, "options": {"wait_for_model": True}},
             timeout=30,
         )
