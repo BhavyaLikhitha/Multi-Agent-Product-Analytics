@@ -70,6 +70,12 @@ reports/
 Thumbs.db
 desktop.ini
 
+# Internal docs (not for public repo)
+docs/WALKTHROUGH.md
+docs/roadmap.md
+docs/PROJECT_INSTRUCTIONS.md
+docs/project_spec.docx
+
 # Large binary files
 *.parquet
 *.pkl
