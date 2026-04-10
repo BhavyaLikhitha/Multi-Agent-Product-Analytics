@@ -1,7 +1,7 @@
 """Semantic search over review embeddings in Pinecone.
 
-Uses sentence-transformers locally if available,
-falls back to Pinecone inference API for cloud.
+Uses local embedding models first and only falls back to
+Hugging Face Inference as a last resort.
 """
 
 import os
@@ -46,30 +46,100 @@ def _get_index():
 
 
 def _encode_query(query: str) -> list[float]:
-    """Encode query: use local model if available, else HuggingFace Inference API."""
+    """Encode query with a local-first strategy."""
     global _model
+    local_errors = []
+
     try:
         if _model is None:
             from sentence_transformers import SentenceTransformer
+
             _model = SentenceTransformer("all-MiniLM-L6-v2")
         return _model.encode(query).tolist()
-    except ImportError:
+    except Exception as exc:
+        local_errors.append(
+            f"sentence-transformers unavailable: {exc}"
+        )
+
+    try:
+        import torch
+        from transformers import AutoModel, AutoTokenizer
+
+        tokenizer = AutoTokenizer.from_pretrained(
+            "sentence-transformers/all-MiniLM-L6-v2"
+        )
+        model = AutoModel.from_pretrained(
+            "sentence-transformers/all-MiniLM-L6-v2"
+        )
+
+        encoded_input = tokenizer(
+            query,
+            padding=True,
+            truncation=True,
+            return_tensors="pt",
+        )
+        with torch.no_grad():
+            model_output = model(**encoded_input)
+
+        token_embeddings = model_output[0]
+        attention_mask = encoded_input["attention_mask"]
+        input_mask_expanded = (
+            attention_mask.unsqueeze(-1)
+            .expand(token_embeddings.size())
+            .float()
+        )
+        pooled = (
+            torch.sum(token_embeddings * input_mask_expanded, dim=1)
+            / torch.clamp(input_mask_expanded.sum(dim=1), min=1e-9)
+        )
+        normalized = torch.nn.functional.normalize(pooled, p=2, dim=1)
+        return normalized[0].tolist()
+    except Exception as exc:
+        local_errors.append(
+            f"transformers fallback unavailable: {exc}"
+        )
+
+    try:
         import requests
 
-        headers = {}
+        headers = {"Content-Type": "application/json"}
         hf_token = _get_secret("HF_TOKEN")
         if hf_token:
             headers["Authorization"] = f"Bearer {hf_token}"
 
         resp = requests.post(
-            "https://router.huggingface.co/hf-inference/models/"
-            "sentence-transformers/all-MiniLM-L6-v2",
+            "https://api-inference.huggingface.co/pipeline/"
+            "feature-extraction/sentence-transformers/all-MiniLM-L6-v2",
             headers=headers,
-            json={"inputs": query},
+            json={
+                "inputs": {
+                    "source_sentence": query,
+                    "sentences": [query],
+                }
+            },
             timeout=30,
         )
         resp.raise_for_status()
-        return resp.json()
+
+        data = resp.json()
+        if isinstance(data, list) and data:
+            if isinstance(data[0], list) and data[0]:
+                if isinstance(data[0][0], (int, float)):
+                    return data[0]
+                if isinstance(data[0][0], list):
+                    return data[0][0]
+            if isinstance(data[0], (int, float)):
+                return data
+        raise ValueError(
+            f"Unexpected HF embedding payload type: {type(data).__name__}"
+        )
+    except Exception as exc:
+        local_errors.append(f"Hugging Face fallback failed: {exc}")
+
+    raise RuntimeError(
+        "Unable to encode semantic search query. "
+        + " | ".join(local_errors)
+    )
 
 
 def search_reviews(
