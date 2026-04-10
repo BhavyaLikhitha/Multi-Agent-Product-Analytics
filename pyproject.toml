@@ -36,6 +36,7 @@ google-generativeai = "^0.8.6"
 anthropic = "^0.88.0"
 evidently = "^0.7.21"
 streamlit = "^1.56.0"
+pinecone = "^8.1.2"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.0"
