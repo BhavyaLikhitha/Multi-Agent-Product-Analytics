@@ -1104,13 +1104,13 @@ margin-bottom:14px;display:flex;align-items:center;gap:8px}
 border-radius:50%}
 .status-green{background:#10b981}
 .status-red{background:#ef4444}
-.page-header-block{margin-bottom:10px}
+.page-header-block{margin-bottom:6px}
 .page-title{font-size:24px;font-weight:600;color:#1a1a1e}
 .page-subtitle{font-size:13px;color:#9c9a92;
-margin-top:2px;margin-bottom:16px}
+margin-top:2px;margin-bottom:10px}
 .metric-card{background:#fff;border-radius:10px;
 padding:16px 18px;border:1px solid rgba(0,0,0,0.08);
-margin-bottom:14px;min-height:110px}
+margin-bottom:10px;min-height:96px}
 .metric-card:hover{box-shadow:0 2px 8px rgba(0,0,0,0.06)}
 .metric-label{font-size:12px;text-transform:uppercase;
 letter-spacing:.6px;color:#6b6a65;margin-bottom:4px;
@@ -1134,9 +1134,9 @@ font-weight:700;letter-spacing:0.2px;margin:2px}
 .badge-purple{background:#ede9fe;color:#6d28d9}
 .badge-teal{background:#cffafe;color:#155e75}
 .card{background:#fff;border:1px solid rgba(0,0,0,0.08);
-border-radius:14px;padding:20px 22px;margin-bottom:16px}
+border-radius:14px;padding:18px 20px;margin-bottom:10px}
 .card-title{font-size:16px;font-weight:600;
-margin-bottom:14px;color:#1a1a1e}
+margin-bottom:10px;color:#1a1a1e}
 .table-wrap{overflow-x:auto;border-radius:10px;
 border:1px solid #e8e7e3;background:#fff}
 table{width:100%;border-collapse:collapse;font-size:14px}
@@ -1148,7 +1148,7 @@ tbody td{padding:12px 14px;border-bottom:1px solid #e8e7e3;
 color:#1a1a2e;font-size:14px}
 tbody tr:last-child td{border-bottom:none}
 .section-divider{display:flex;align-items:center;
-gap:12px;margin:36px 0 20px}
+gap:12px;margin:22px 0 12px}
 .section-divider-line{flex:1;height:1px;
 background:rgba(0,0,0,0.08)}
 .section-divider-label{font-size:12px;
