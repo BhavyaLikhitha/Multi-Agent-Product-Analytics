@@ -704,6 +704,31 @@ def page_search():
         "Search 50K review embeddings by meaning, not just keywords",
     )
 
+    # Check if search dependencies are available
+    try:
+        import torch  # noqa: F401
+    except ImportError:
+        st.markdown(
+            '<div class="card">'
+            '<div class="card-title">Semantic Search</div>'
+            '<div class="text-sm" style="color:#4b4a45">'
+            "This feature requires PyTorch and "
+            "sentence-transformers which are available "
+            "in the local deployment.<br><br>"
+            "<b>How it works:</b> Natural language queries "
+            "like 'bluetooth keeps disconnecting' are "
+            "encoded into 384-dim vectors and matched "
+            "against 8,963 review embeddings in Pinecone "
+            "using cosine similarity.<br><br>"
+            "<b>To try locally:</b><br>"
+            "<code>docker-compose up -d</code><br>"
+            "<code>poetry run streamlit run "
+            "src/dashboard/app.py</code>"
+            "</div></div>",
+            unsafe_allow_html=True,
+        )
+        return
+
 
     search_examples = {
         "Bluetooth": "bluetooth keeps disconnecting",
