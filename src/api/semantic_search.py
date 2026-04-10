@@ -1,7 +1,7 @@
 """Semantic search over review embeddings in Pinecone.
 
 Uses sentence-transformers locally if available,
-falls back to a lightweight approach for cloud.
+falls back to Pinecone inference API for cloud.
 """
 
 import os
@@ -11,6 +11,7 @@ from pinecone import Pinecone
 
 load_dotenv()
 
+_pc = None
 _index = None
 _model = None
 
@@ -24,12 +25,19 @@ def _get_secret(key, default=None):
         return os.environ.get(key, default)
 
 
+def _get_pc():
+    global _pc
+    if _pc is None:
+        _pc = Pinecone(
+            api_key=_get_secret("PINECONE_API_KEY")
+        )
+    return _pc
+
+
 def _get_index():
     global _index
     if _index is None:
-        pc = Pinecone(
-            api_key=_get_secret("PINECONE_API_KEY")
-        )
+        pc = _get_pc()
         index_name = _get_secret(
             "PINECONE_INDEX", "review-embeddings"
         )
@@ -37,13 +45,25 @@ def _get_index():
     return _index
 
 
-def _get_model():
+def _encode_query(query: str) -> list[float]:
+    """Encode query: use local model if available, else HuggingFace Inference API."""
     global _model
-    if _model is None:
-        from sentence_transformers import SentenceTransformer
+    try:
+        if _model is None:
+            from sentence_transformers import SentenceTransformer
+            _model = SentenceTransformer("all-MiniLM-L6-v2")
+        return _model.encode(query).tolist()
+    except ImportError:
+        import requests
 
-        _model = SentenceTransformer("all-MiniLM-L6-v2")
-    return _model
+        resp = requests.post(
+            "https://api-inference.huggingface.co/pipeline/feature-extraction/"
+            "sentence-transformers/all-MiniLM-L6-v2",
+            json={"inputs": query, "options": {"wait_for_model": True}},
+            timeout=30,
+        )
+        resp.raise_for_status()
+        return resp.json()
 
 
 def search_reviews(
@@ -53,10 +73,9 @@ def search_reviews(
     max_rating: float = None,
 ) -> list[dict]:
     """Search reviews by semantic similarity."""
-    model = _get_model()
     index = _get_index()
 
-    query_embedding = model.encode(query).tolist()
+    query_embedding = _encode_query(query)
 
     pc_filter = {}
     if min_rating is not None and max_rating is not None:
