@@ -840,6 +840,21 @@ def page_performance():
         "Metrics, evaluation results, and drift monitoring",
     )
 
+    render_section_divider("MODELS IN USE")
+
+    st.markdown(
+        '<div class="card">'
+        '<div class="card-title">Production Models</div>'
+        '<div class="text-sm" style="color:#4b4a45;line-height:1.8">'
+        f'{badge("Root Cause", "badge-red")} DistilBERT multi-class classifier for defect, shipping, description, size, and price issues<br>'
+        f'{badge("Semantic Search", "badge-blue")} all-MiniLM-L6-v2 embeddings in Pinecone for meaning-based review retrieval<br>'
+        f'{badge("Anomaly Detection", "badge-amber")} Isolation Forest for rating-volume-alert outliers<br>'
+        f'{badge("Helpfulness", "badge-teal")} Gradient boosting regressor for helpful-vote prediction<br>'
+        f'{badge("LLM Audit", "badge-purple")} Base Groq model vs fine-tuned Mistral evaluator for audit quality'
+        "</div></div>",
+        unsafe_allow_html=True,
+    )
+
     render_section_divider("MODEL METRICS")
 
     render_metric_cards(
