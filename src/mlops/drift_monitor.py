@@ -126,9 +126,14 @@ def main():
 
         if parsed:
             widgets = parsed.get("widgets", [{}])[0].get("widgets", [])
-            summary = {"dataset_drift_detected": False, "drift_threshold": 0.5,
-                       "total_columns": 0, "drifted_columns": 0,
-                       "drift_share": 0.0, "columns": []}
+            summary = {
+                "dataset_drift_detected": False,
+                "drift_threshold": 0.5,
+                "total_columns": 0,
+                "drifted_columns": 0,
+                "drift_share": 0.0,
+                "columns": [],
+            }
             for w in widgets:
                 counters = w.get("params", {}).get("counters", [])
                 for c in counters:
@@ -138,12 +143,14 @@ def main():
                         summary["dataset_drift_detected"] = True
                 data_rows = w.get("params", {}).get("data", [])
                 for row in data_rows:
-                    summary["columns"].append({
-                        "name": row.get("column_name", ""),
-                        "drift_detected": row.get("data_drift") == "Detected",
-                        "drift_score": row.get("drift_score", 0),
-                        "stattest": row.get("stattest_name", ""),
-                    })
+                    summary["columns"].append(
+                        {
+                            "name": row.get("column_name", ""),
+                            "drift_detected": row.get("data_drift") == "Detected",
+                            "drift_score": row.get("drift_score", 0),
+                            "stattest": row.get("stattest_name", ""),
+                        }
+                    )
             summary["total_columns"] = len(summary["columns"])
             summary["drifted_columns"] = sum(
                 1 for c in summary["columns"] if c["drift_detected"]

@@ -15,14 +15,10 @@ BATCH_SIZE = 5000
 def get_local_engine():
     host = os.environ.get("POSTGRES_HOST", "localhost")
     port = os.environ.get("POSTGRES_PORT", "5432")
-    db = os.environ.get(
-        "POSTGRES_DB", "product_intelligence"
-    )
+    db = os.environ.get("POSTGRES_DB", "product_intelligence")
     user = os.environ.get("POSTGRES_USER", "postgres")
     pw = os.environ.get("POSTGRES_PASSWORD", "postgres")
-    return create_engine(
-        f"postgresql://{user}:{pw}@{host}:{port}/{db}"
-    )
+    return create_engine(f"postgresql://{user}:{pw}@{host}:{port}/{db}")
 
 
 def get_neon_engine():
@@ -30,9 +26,7 @@ def get_neon_engine():
     return create_engine(url)
 
 
-def migrate_table(
-    local_engine, neon_engine, table, limit=None
-):
+def migrate_table(local_engine, neon_engine, table, limit=None):
     """Copy a table from local to Neon."""
     query = f"SELECT * FROM {table}"
     if limit:
@@ -61,15 +55,11 @@ def migrate_table(
             index=False,
         )
         total += len(chunk)
-        logger.info(
-            f"  {total:,} / {len(df):,} rows written"
-        )
+        logger.info(f"  {total:,} / {len(df):,} rows written")
 
     # Verify
     with neon_engine.connect() as conn:
-        count = conn.execute(
-            text(f"SELECT COUNT(*) FROM {table}")
-        ).scalar()
+        count = conn.execute(text(f"SELECT COUNT(*) FROM {table}")).scalar()
     logger.info(f"  Verified: {count:,} rows in Neon")
 
 
@@ -90,9 +80,7 @@ def main():
     # Alerts: all
     migrate_table(local, neon, "alerts")
     # Product features: limit for storage
-    migrate_table(
-        local, neon, "product_features", limit=50000
-    )
+    migrate_table(local, neon, "product_features", limit=50000)
 
     logger.info("Migration complete!")
 

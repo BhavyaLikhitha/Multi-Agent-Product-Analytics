@@ -28,9 +28,7 @@ def _get_secret(key, default=None):
 def _get_pc():
     global _pc
     if _pc is None:
-        _pc = Pinecone(
-            api_key=_get_secret("PINECONE_API_KEY")
-        )
+        _pc = Pinecone(api_key=_get_secret("PINECONE_API_KEY"))
     return _pc
 
 
@@ -38,9 +36,7 @@ def _get_index():
     global _index
     if _index is None:
         pc = _get_pc()
-        index_name = _get_secret(
-            "PINECONE_INDEX", "review-embeddings"
-        )
+        index_name = _get_secret("PINECONE_INDEX", "review-embeddings")
         _index = pc.Index(index_name)
     return _index
 
@@ -57,9 +53,7 @@ def _encode_query(query: str) -> list[float]:
             _model = SentenceTransformer("all-MiniLM-L6-v2")
         return _model.encode(query).tolist()
     except Exception as exc:
-        local_errors.append(
-            f"sentence-transformers unavailable: {exc}"
-        )
+        local_errors.append(f"sentence-transformers unavailable: {exc}")
 
     try:
         import torch
@@ -68,9 +62,7 @@ def _encode_query(query: str) -> list[float]:
         tokenizer = AutoTokenizer.from_pretrained(
             "sentence-transformers/all-MiniLM-L6-v2"
         )
-        model = AutoModel.from_pretrained(
-            "sentence-transformers/all-MiniLM-L6-v2"
-        )
+        model = AutoModel.from_pretrained("sentence-transformers/all-MiniLM-L6-v2")
 
         encoded_input = tokenizer(
             query,
@@ -84,20 +76,15 @@ def _encode_query(query: str) -> list[float]:
         token_embeddings = model_output[0]
         attention_mask = encoded_input["attention_mask"]
         input_mask_expanded = (
-            attention_mask.unsqueeze(-1)
-            .expand(token_embeddings.size())
-            .float()
+            attention_mask.unsqueeze(-1).expand(token_embeddings.size()).float()
         )
-        pooled = (
-            torch.sum(token_embeddings * input_mask_expanded, dim=1)
-            / torch.clamp(input_mask_expanded.sum(dim=1), min=1e-9)
+        pooled = torch.sum(token_embeddings * input_mask_expanded, dim=1) / torch.clamp(
+            input_mask_expanded.sum(dim=1), min=1e-9
         )
         normalized = torch.nn.functional.normalize(pooled, p=2, dim=1)
         return normalized[0].tolist()
     except Exception as exc:
-        local_errors.append(
-            f"transformers fallback unavailable: {exc}"
-        )
+        local_errors.append(f"transformers fallback unavailable: {exc}")
 
     try:
         import requests
@@ -130,15 +117,12 @@ def _encode_query(query: str) -> list[float]:
                     return data[0][0]
             if isinstance(data[0], (int, float)):
                 return data
-        raise ValueError(
-            f"Unexpected HF embedding payload type: {type(data).__name__}"
-        )
+        raise ValueError(f"Unexpected HF embedding payload type: {type(data).__name__}")
     except Exception as exc:
         local_errors.append(f"Hugging Face fallback failed: {exc}")
 
     raise RuntimeError(
-        "Unable to encode semantic search query. "
-        + " | ".join(local_errors)
+        "Unable to encode semantic search query. " + " | ".join(local_errors)
     )
 
 
@@ -191,11 +175,6 @@ def search_reviews(
 
 
 if __name__ == "__main__":
-    results = search_reviews(
-        "bluetooth keeps disconnecting", n_results=5
-    )
+    results = search_reviews("bluetooth keeps disconnecting", n_results=5)
     for r in results:
-        print(
-            f"[{r['rating']}] {r['text'][:100]}... "
-            f"(sim={1 - r['distance']:.3f})"
-        )
+        print(f"[{r['rating']}] {r['text'][:100]}... " f"(sim={1 - r['distance']:.3f})")

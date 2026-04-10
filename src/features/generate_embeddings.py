@@ -27,21 +27,15 @@ def get_postgres_engine():
         return create_engine(neon_url)
     host = os.environ.get("POSTGRES_HOST", "localhost")
     port = os.environ.get("POSTGRES_PORT", "5432")
-    db = os.environ.get(
-        "POSTGRES_DB", "product_intelligence"
-    )
+    db = os.environ.get("POSTGRES_DB", "product_intelligence")
     user = os.environ.get("POSTGRES_USER", "postgres")
     pw = os.environ.get("POSTGRES_PASSWORD", "postgres")
-    return create_engine(
-        f"postgresql://{user}:{pw}@{host}:{port}/{db}"
-    )
+    return create_engine(f"postgresql://{user}:{pw}@{host}:{port}/{db}")
 
 
 def get_pinecone_index():
     pc = Pinecone(api_key=os.environ["PINECONE_API_KEY"])
-    index_name = os.environ.get(
-        "PINECONE_INDEX", "review-embeddings"
-    )
+    index_name = os.environ.get("PINECONE_INDEX", "review-embeddings")
     return pc.Index(index_name)
 
 
@@ -72,14 +66,10 @@ def generate_and_store(df, model, index):
         texts = batch["text"].fillna("").tolist()
         ids = [f"rev_{start + i}" for i in range(len(batch))]
 
-        embeddings = model.encode(
-            texts, show_progress_bar=False
-        ).tolist()
+        embeddings = model.encode(texts, show_progress_bar=False).tolist()
 
         vectors = []
-        for i, (emb, row_idx) in enumerate(
-            zip(embeddings, batch.index)
-        ):
+        for i, (emb, row_idx) in enumerate(zip(embeddings, batch.index)):
             row = batch.loc[row_idx]
             vectors.append(
                 {
@@ -88,21 +78,15 @@ def generate_and_store(df, model, index):
                     "metadata": {
                         "asin": str(row["asin"]),
                         "rating": float(row["rating"]),
-                        "title": str(row["title"] or "")[
-                            :200
-                        ],
-                        "text": str(row["text"] or "")[
-                            :500
-                        ],
+                        "title": str(row["title"] or "")[:200],
+                        "text": str(row["text"] or "")[:500],
                     },
                 }
             )
 
         index.upsert(vectors=vectors)
 
-        logger.info(
-            f"Embedded {end:,} / {total:,}"
-        )
+        logger.info(f"Embedded {end:,} / {total:,}")
 
 
 if __name__ == "__main__":
@@ -112,9 +96,7 @@ if __name__ == "__main__":
     stats = index.describe_index_stats()
     existing = stats.get("total_vector_count", 0)
     if existing > 0:
-        logger.info(
-            f"Index already has {existing:,} vectors"
-        )
+        logger.info(f"Index already has {existing:,} vectors")
 
     logger.info(f"Loading model: {MODEL_NAME}")
     model = SentenceTransformer(MODEL_NAME)

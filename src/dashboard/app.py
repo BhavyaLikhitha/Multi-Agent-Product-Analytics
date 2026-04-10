@@ -18,9 +18,7 @@ from sqlalchemy import create_engine, text
 load_dotenv()
 
 # Add project root to path for imports
-_ROOT = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..", "..")
-)
+_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
@@ -1031,7 +1029,11 @@ def page_performance():
         tbl_rows = []
         for col in drift["columns"]:
             d = col["drift_detected"]
-            d_badge = badge("Detected", "badge-red") if d else badge("Not Detected", "badge-green")
+            d_badge = (
+                badge("Detected", "badge-red")
+                if d
+                else badge("Not Detected", "badge-green")
+            )
             score = f"{col['drift_score']:.4f}"
             tbl_rows.append(
                 [
