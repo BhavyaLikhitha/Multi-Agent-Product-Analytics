@@ -5,3 +5,4 @@ psycopg2-binary>=2.9
 python-dotenv>=1.0
 plotly>=5.18
 loguru>=0.7
+pinecone>=5.0
