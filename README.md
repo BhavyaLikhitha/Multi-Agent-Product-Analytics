@@ -26,6 +26,9 @@ E-commerce companies lose **$50B+/year** on product returns. Quality issues surf
 | Misleading product listings persist | Listing says "8-hour battery" but reviews say 4 hours | LangGraph 4-agent pipeline **automatically identifies mismatches** and rewrites listings with honest disclaimers |
 | No way to search reviews by meaning | Keyword search misses "signal drops" when searching for "bluetooth disconnecting" | Semantic search over **50K review embeddings** (384-dim vectors) finds reviews by meaning, not keywords |
 
+---
+
+## Streamlit Dashboard
 **Streamlit dashboard link:** https://multi-agent-analytics-llm.streamlit.app/
 
 <p align="center">
