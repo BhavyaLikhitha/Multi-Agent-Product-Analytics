@@ -1,24 +1,37 @@
-"""Streamlit dashboard for Product Intelligence platform.
+"""Product Intelligence Dashboard - Production UI.
 
-Pages:
-1. Quality Alerts — live alerts from anomaly detector
-2. Product Deep Dive — select product, see reviews + NER + classifier
-3. Classifier Demo — paste review text, get root cause labels
-4. Semantic Search — natural language search over reviews
-5. Model Performance — metrics summary
+5 pages: Quality Alerts, Product Deep Dive,
+Classifier Demo, Semantic Search, Model Performance.
 """
 
 import os
+from collections import Counter
 
 import pandas as pd
+import plotly.graph_objects as go
 import streamlit as st
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 
 load_dotenv()
 
+# ── Page config ─────────────────────────────────────
+st.set_page_config(
+    page_title="Product Intelligence",
+    page_icon="🔍",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
 
+# ── Database ────────────────────────────────────────
+
+
+@st.cache_resource
 def get_engine():
+    # Use Neon cloud DB if available, else local
+    neon_url = os.environ.get("NEON_DATABASE_URL")
+    if neon_url:
+        return create_engine(neon_url)
     host = os.environ.get("POSTGRES_HOST", "localhost")
     port = os.environ.get("POSTGRES_PORT", "5432")
     db = os.environ.get("POSTGRES_DB", "product_intelligence")
@@ -27,173 +40,445 @@ def get_engine():
     return create_engine(f"postgresql://{user}:{pw}@{host}:{port}/{db}")
 
 
-engine = get_engine()
+def _db_ok() -> tuple:
+    try:
+        with get_engine().connect() as conn:
+            conn.execute(text("SELECT 1"))
+        return True, "PostgreSQL connected"
+    except Exception:
+        return False, "PostgreSQL unavailable"
 
-st.set_page_config(
-    page_title="Product Intelligence",
-    page_icon="🔍",
-    layout="wide",
-)
 
-st.title("Product Intelligence Dashboard")
+# ── Render helpers (matching reference style) ───────
 
-page = st.sidebar.radio(
-    "Navigate",
-    [
+
+def render_page_header(title, subtitle):
+    st.markdown(
+        f'<div class="page-header-block">'
+        f'<div class="page-title">{title}</div>'
+        f'<div class="page-subtitle">{subtitle}</div>'
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+
+
+def render_metric_cards(cards):
+    cols = st.columns(len(cards))
+    for col, c in zip(cols, cards):
+        vc = ""
+        if c.get("color"):
+            vc = f' style="color:{c["color"]}"'
+        with col:
+            st.markdown(
+                f'<div class="metric-card">'
+                f'<div class="metric-label">'
+                f'{c["label"]}</div>'
+                f'<div class="metric-value"{vc}>'
+                f'{c["value"]}</div>'
+                f'<div class="metric-delta">'
+                f'{c.get("delta", "")}</div>'
+                f"</div>",
+                unsafe_allow_html=True,
+            )
+
+
+def render_section_divider(label):
+    st.markdown(
+        f'<div class="section-divider">'
+        f'<span class="section-divider-label">'
+        f"{label}</span>"
+        f'<div class="section-divider-line"></div>'
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+
+
+def render_table(headers, rows):
+    head = "".join(f"<th>{h}</th>" for h in headers)
+    body = "".join("<tr>" + "".join(f"<td>{c}</td>" for c in r) + "</tr>" for r in rows)
+    st.markdown(
+        f'<div class="table-wrap"><table>'
+        f"<thead><tr>{head}</tr></thead>"
+        f"<tbody>{body}</tbody>"
+        f"</table></div>",
+        unsafe_allow_html=True,
+    )
+
+
+def badge(text_val, cls="badge-green"):
+    return f'<span class="badge {cls}">{text_val}</span>'
+
+
+def mono(text_val):
+    return f'<span class="text-mono">{text_val}</span>'
+
+
+# ── Cached queries ──────────────────────────────────
+
+
+@st.cache_data(ttl=300)
+def load_alerts(severity=None):
+    q = "SELECT * FROM alerts ORDER BY detected_at DESC LIMIT 200"
+    if severity and severity != "All":
+        q = (
+            "SELECT * FROM alerts "
+            "WHERE severity = :sev "
+            "ORDER BY detected_at DESC LIMIT 200"
+        )
+        return pd.read_sql(text(q), get_engine(), params={"sev": severity})
+    return pd.read_sql(text(q), get_engine())
+
+
+@st.cache_data(ttl=300)
+def load_top_products(limit=50):
+    q = text(
+        """
+        SELECT r.asin, p.title,
+               COUNT(*) as review_count,
+               ROUND(AVG(r.rating)::numeric, 2) as avg_rating
+        FROM reviews r
+        LEFT JOIN products p ON r.parent_asin = p.parent_asin
+        GROUP BY r.asin, p.title
+        ORDER BY review_count DESC
+        LIMIT :lim
+        """
+    )
+    return pd.read_sql(q, get_engine(), params={"lim": limit})
+
+
+@st.cache_data(ttl=300)
+def load_reviews_for_product(asin, limit=20):
+    q = text(
+        "SELECT rating, title, text, helpful_votes, timestamp "
+        "FROM reviews WHERE asin = :asin "
+        "ORDER BY helpful_votes DESC LIMIT :lim"
+    )
+    return pd.read_sql(q, get_engine(), params={"asin": asin, "lim": limit})
+
+
+@st.cache_data(ttl=300)
+def load_rating_distribution(asin):
+    q = text(
+        "SELECT rating, COUNT(*) as count "
+        "FROM reviews WHERE asin = :asin "
+        "GROUP BY rating ORDER BY rating"
+    )
+    return pd.read_sql(q, get_engine(), params={"asin": asin})
+
+
+# ── Navigation ──────────────────────────────────────
+
+_NAV = [
+    "◈ Quality Alerts",
+    "◆ Product Deep Dive",
+    "✦ Classifier Demo",
+    "◎ Semantic Search",
+    "▣ Model Performance",
+]
+
+# ── Sidebar ─────────────────────────────────────────
+
+with st.sidebar:
+    ok, status_msg = _db_ok()
+    dot = "status-green" if ok else "status-red"
+    st.markdown(
+        f'<div style="margin-top:-20px;padding-top:0">'
+        f'<div class="sidebar-brand">Product Intelligence</div>'
+        f'<div class="sidebar-title">Review Analytics Platform</div>'
+        f'<div class="sidebar-status-row">'
+        f'<span class="status-dot {dot}"></span>'
+        f"{status_msg}</div>"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+
+    st.markdown("---")
+    st.markdown("##### Navigate")
+    page = st.radio(
+        "Nav",
+        _NAV,
+        label_visibility="collapsed",
+        key="page_radio",
+    )
+
+    st.markdown("---")
+    st.markdown(
+        '<div style="font-size:11px;color:#5a5955;'
+        'line-height:1.6">'
+        "Multi-Agent Product Analytics<br>"
+        "500K reviews · 1.6M products<br>"
+        "PyTorch · Mistral-7B · LangGraph<br>"
+        "FastAPI · Streamlit</div>",
+        unsafe_allow_html=True,
+    )
+
+
+# ═══════════════════════════════════════════════════
+# PAGE 1 — Quality Alerts
+# ═══════════════════════════════════════════════════
+
+
+def page_alerts():
+    render_page_header(
         "Quality Alerts",
-        "Product Deep Dive",
-        "Classifier Demo",
-        "Semantic Search",
-        "Model Performance",
-    ],
-)
-
-
-# ─── Page 1: Quality Alerts ───────────────────────────
-if page == "Quality Alerts":
-    st.header("Quality Alerts")
-    st.markdown("Products flagged by the anomaly detection model.")
+        "Products flagged by the anomaly detection autoencoder",
+    )
 
     severity = st.selectbox(
         "Filter by severity",
         ["All", "critical", "warning"],
     )
 
-    query = "SELECT * FROM alerts ORDER BY detected_at DESC LIMIT 100"
-    if severity != "All":
-        query = (
-            f"SELECT * FROM alerts "
-            f"WHERE severity = '{severity}' "
-            f"ORDER BY detected_at DESC LIMIT 100"
-        )
+    with st.spinner("Loading alerts..."):
+        try:
+            alerts = load_alerts(severity)
+        except Exception as e:
+            st.error(f"Could not load alerts: {e}")
+            return
 
-    try:
-        alerts = pd.read_sql(text(query), engine)
-        if alerts.empty:
-            st.info("No alerts found.")
-        else:
-            st.metric("Total Alerts", len(alerts))
+    if alerts.empty:
+        st.info("No alerts found.")
+        return
 
-            col1, col2 = st.columns(2)
-            with col1:
-                critical = len(alerts[alerts["severity"] == "critical"])
-                st.metric("Critical", critical)
-            with col2:
-                warning = len(alerts[alerts["severity"] == "warning"])
-                st.metric("Warning", warning)
+    total = len(alerts)
+    critical = len(alerts[alerts["severity"] == "critical"])
+    warning = len(alerts[alerts["severity"] == "warning"])
 
-            st.dataframe(
-                alerts[
-                    [
-                        "product_id",
-                        "alert_type",
-                        "severity",
-                        "detected_at",
-                        "details",
-                    ]
-                ],
-                use_container_width=True,
-            )
-    except Exception as e:
-        st.error(f"Could not load alerts: {e}")
-
-
-# ─── Page 2: Product Deep Dive ────────────────────────
-elif page == "Product Deep Dive":
-    st.header("Product Deep Dive")
-
-    top_products = pd.read_sql(
-        text(
-            """
-            SELECT r.asin, p.title,
-                   COUNT(*) as review_count,
-                   ROUND(AVG(r.rating)::numeric, 2)
-                       as avg_rating
-            FROM reviews r
-            LEFT JOIN products p
-                ON r.parent_asin = p.parent_asin
-            GROUP BY r.asin, p.title
-            ORDER BY review_count DESC
-            LIMIT 50
-            """
-        ),
-        engine,
+    render_metric_cards(
+        [
+            {
+                "label": "Total Alerts",
+                "value": f"{total:,}",
+                "delta": "From anomaly detector",
+            },
+            {
+                "label": "Critical",
+                "value": f"{critical:,}",
+                "delta": "Score > 2x threshold",
+                "color": "#dc2626",
+            },
+            {
+                "label": "Warning",
+                "value": f"{warning:,}",
+                "delta": "Score > threshold",
+                "color": "#d97706",
+            },
+        ]
     )
 
+    render_section_divider("ALERT DETAILS")
+
+    tbl_rows = []
+    for _, r in alerts.head(50).iterrows():
+        sev = r.get("severity", "")
+        sev_badge = (
+            badge(sev, "badge-red") if sev == "critical" else badge(sev, "badge-amber")
+        )
+        tbl_rows.append(
+            [
+                mono(r.get("product_id", "")),
+                r.get("alert_type", ""),
+                sev_badge,
+                str(r.get("detected_at", ""))[:19],
+                str(r.get("details", ""))[:80],
+            ]
+        )
+
+    render_table(
+        ["Product", "Type", "Severity", "Detected", "Details"],
+        tbl_rows,
+    )
+
+
+# ═══════════════════════════════════════════════════
+# PAGE 2 — Product Deep Dive
+# ═══════════════════════════════════════════════════
+
+
+def page_deep_dive():
+    render_page_header(
+        "Product Deep Dive",
+        "Select a product to analyze reviews, NER entities, and complaint patterns",
+    )
+
+    with st.spinner("Loading products..."):
+        top_products = load_top_products()
+
+    if top_products.empty:
+        st.info("No products found.")
+        return
+
     selected = st.selectbox(
-        "Select a product",
+        "Select product",
         top_products["asin"].tolist(),
         format_func=lambda x: (
             f"{x} — "
-            f"{top_products[top_products['asin']==x]['title'].values[0] or 'Unknown'}"  # noqa: E501
-            f" ({top_products[top_products['asin']==x]['review_count'].values[0]} reviews)"  # noqa: E501
+            + str(
+                top_products[top_products["asin"] == x]["title"].values[0] or "Unknown"
+            )[:60]
         ),
     )
 
-    if selected:
-        info = top_products[top_products["asin"] == selected].iloc[0]
-        col1, col2, col3 = st.columns(3)
-        col1.metric("Reviews", info["review_count"])
-        col2.metric("Avg Rating", info["avg_rating"])
-        col3.metric("Product", str(info["title"])[:50])
+    if not selected:
+        return
 
-        reviews = pd.read_sql(
-            text(
-                "SELECT rating, title, text, "
-                "helpful_votes, timestamp "
-                "FROM reviews WHERE asin = :asin "
-                "ORDER BY helpful_votes DESC "
-                "LIMIT 20"
-            ),
-            engine,
-            params={"asin": selected},
+    info = top_products[top_products["asin"] == selected].iloc[0]
+
+    avg_r = float(info["avg_rating"])
+    rating_color = (
+        "#0d9f6e" if avg_r >= 4.0 else "#d97706" if avg_r >= 3.0 else "#dc2626"
+    )
+
+    render_metric_cards(
+        [
+            {
+                "label": "Total Reviews",
+                "value": f"{info['review_count']:,}",
+                "delta": "",
+            },
+            {
+                "label": "Avg Rating",
+                "value": f"{avg_r}",
+                "delta": "out of 5.0",
+                "color": rating_color,
+            },
+            {
+                "label": "Product",
+                "value": (
+                    '<span style="font-size:14px">'
+                    + str(info["title"] or "Unknown")[:60]
+                    + "</span>"
+                ),
+                "delta": selected,
+            },
+        ]
+    )
+
+    # Rating distribution chart
+    render_section_divider("RATING DISTRIBUTION")
+    with st.spinner("Loading distribution..."):
+        dist = load_rating_distribution(selected)
+
+    if not dist.empty:
+        colors = {
+            1: "#dc2626",
+            2: "#f97316",
+            3: "#d97706",
+            4: "#0d9488",
+            5: "#0d9f6e",
+        }
+        fig = go.Figure()
+        for _, row in dist.iterrows():
+            r_val = int(row["rating"])
+            fig.add_trace(
+                go.Bar(
+                    x=[f"{r_val} star"],
+                    y=[row["count"]],
+                    marker_color=colors.get(r_val, "#6366f1"),
+                    name=f"{r_val} star",
+                    showlegend=False,
+                )
+            )
+        fig.update_layout(
+            height=250,
+            margin=dict(t=10, b=30, l=40, r=10),
+            plot_bgcolor="white",
+            paper_bgcolor="white",
+            yaxis_title="Count",
         )
+        st.plotly_chart(fig, use_container_width=True)
 
-        st.subheader("Top Reviews")
-        for _, row in reviews.iterrows():
-            with st.expander(
-                f"{'⭐' * int(row['rating'])} " f"{row['title'] or 'No title'}"
-            ):
-                st.write(row["text"])
-                st.caption(f"Helpful votes: " f"{row['helpful_votes']}")
-
-        # NER analysis
-        st.subheader("NER Analysis")
+    # NER Analysis
+    render_section_divider("NER ENTITY ANALYSIS")
+    with st.spinner("Running NER..."):
         try:
-            from src.features.ner_extractor import extract_batch_fast
+            reviews = load_reviews_for_product(selected)
+            from src.features.ner_extractor import (
+                extract_batch_fast,
+            )
 
             texts = reviews["text"].fillna("").tolist()
             ner_results = extract_batch_fast(texts)
 
-            from collections import Counter
-
-            all_comps = Counter()
-            all_issues = Counter()
+            comp_counter = Counter()
+            issue_counter = Counter()
             for ner in ner_results:
                 for c in ner["components"]:
-                    all_comps[c] += 1
+                    comp_counter[c] += 1
                 for i in ner["issues"]:
-                    all_issues[i] += 1
+                    issue_counter[i] += 1
 
             col1, col2 = st.columns(2)
             with col1:
-                st.markdown("**Top Components**")
-                for comp, cnt in all_comps.most_common(10):
-                    st.write(f"- {comp}: {cnt}")
+                st.markdown(
+                    '<div class="card-title">Top Components</div>',
+                    unsafe_allow_html=True,
+                )
+                comp_html = " ".join(
+                    badge(f"{c} ({n})", "badge-blue")
+                    for c, n in comp_counter.most_common(10)
+                )
+                st.markdown(
+                    f'<div class="card">{comp_html}</div>',
+                    unsafe_allow_html=True,
+                )
             with col2:
-                st.markdown("**Top Issues**")
-                for iss, cnt in all_issues.most_common(10):
-                    st.write(f"- {iss}: {cnt}")
+                st.markdown(
+                    '<div class="card-title">Top Issues</div>',
+                    unsafe_allow_html=True,
+                )
+                issue_html = " ".join(
+                    badge(f"{i} ({n})", "badge-red")
+                    for i, n in issue_counter.most_common(10)
+                )
+                st.markdown(
+                    f'<div class="card">{issue_html}</div>',
+                    unsafe_allow_html=True,
+                )
         except Exception as e:
-            st.warning(f"NER analysis failed: {e}")
+            st.warning(f"NER analysis unavailable: {e}")
+
+    # Top Reviews
+    render_section_divider("TOP REVIEWS")
+    if not reviews.empty:
+        for _, row in reviews.head(10).iterrows():
+            r_val = int(row["rating"])
+            star_cls = (
+                "badge-green"
+                if r_val >= 4
+                else "badge-amber" if r_val >= 3 else "badge-red"
+            )
+            stars = "★" * r_val + "☆" * (5 - r_val)
+            title = row["title"] or "No title"
+            review_text = str(row["text"] or "")[:300]
+            helpful = row.get("helpful_votes", 0)
+
+            st.markdown(
+                f'<div class="card">'
+                f'<div class="flex items-center gap-8 mb-4">'
+                f"{badge(stars, star_cls)} "
+                f'<span style="font-weight:600">{title}</span>'
+                f"</div>"
+                f'<div class="text-sm" style="color:#4b4a45">'
+                f"{review_text}...</div>"
+                f'<div class="text-xs text-muted" style="margin-top:8px">'
+                f"Helpful votes: {helpful}</div>"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
 
 
-# ─── Page 3: Classifier Demo ─────────────────────────
-elif page == "Classifier Demo":
-    st.header("Root Cause Classifier Demo")
-    st.markdown("Paste any review text to classify its root cause.")
+# ═══════════════════════════════════════════════════
+# PAGE 3 — Classifier Demo
+# ═══════════════════════════════════════════════════
 
-    st.markdown("**Try these examples:**")
+
+def page_classifier():
+    render_page_header(
+        "Root Cause Classifier",
+        "Paste any review text to classify its root cause into 5 categories",
+    )
+
     examples = {
         "Defect": (
             "The battery died after 2 weeks and the "
@@ -215,7 +500,7 @@ elif page == "Classifier Demo":
             "Total waste of money. Overpriced garbage. "
             "You can find better for half the price. Scam."
         ),
-        "Multiple": (
+        "Multiple Issues": (
             "The battery died after 2 weeks, screen is "
             "cracked, arrived damaged with missing parts. "
             "Total waste of money and doesn't match "
@@ -223,279 +508,548 @@ elif page == "Classifier Demo":
         ),
     }
 
-    selected_example = st.selectbox(
-        "Pick an example or type your own below",
-        ["Custom"] + list(examples.keys()),
-    )
-
-    default_text = ""
-    if selected_example != "Custom":
-        default_text = examples[selected_example]
+    render_section_divider("EXAMPLES")
+    ex_cols = st.columns(len(examples))
+    for col, (name, txt) in zip(ex_cols, examples.items()):
+        with col:
+            if st.button(name, key=f"ex_{name}", use_container_width=True):
+                st.session_state["demo_text"] = txt
 
     review_text = st.text_area(
         "Enter review text",
-        value=default_text,
-        height=150,
+        value=st.session_state.get("demo_text", ""),
+        height=120,
     )
 
-    if st.button("Classify") and review_text:
-        try:
-            from src.features.ner_extractor import extract_fast
-
-            ner = extract_fast(review_text)
-
-            st.subheader("NER Entities")
-            col1, col2 = st.columns(2)
-            col1.write(f"**Components:** {', '.join(ner['components']) or 'None'}")
-            col2.write(f"**Issues:** {', '.join(ner['issues']) or 'None'}")
-
-            # Score using NER issues matched to categories
-            defect_words = {
-                "broke",
-                "broken",
-                "cracked",
-                "defective",
-                "faulty",
-                "malfunction",
-                "malfunctioning",
-                "dead",
-                "died",
-                "stopped working",
-                "not working",
-                "doesn't work",
-                "does not work",
-                "won't turn on",
-                "won't charge",
-                "overheating",
-                "overheat",
-                "slow",
-                "laggy",
-                "freezing",
-                "crash",
-                "crashed",
-                "glitchy",
-                "buggy",
-                "discharged",
-                "drains",
-                "unresponsive",
-            }
-            shipping_words = {
-                "arrived damaged",
-                "arrived broken",
-                "missing parts",
-                "wrong item",
-                "wrong product",
-                "late delivery",
-                "never arrived",
-                "incomplete",
-                "damaged in transit",
-            }
-            desc_words = {
-                "misleading",
-                "not as described",
-                "not as advertised",
-                "false advertising",
-                "cheaply made",
-                "cheap quality",
-                "poor quality",
-                "low quality",
-                "flimsy",
-                "looks nothing like",
-                "doesn't match",
-                "does not match",
-                "different from",
-                "different than",
-                "not what i expected",
-                "not what was shown",
-                "nothing like the picture",
-                "description",
-                "listing",
-            }
-            size_words = {
-                "too small",
-                "too big",
-                "too large",
-                "too tight",
-                "doesn't fit",
-                "does not fit",
-                "wrong size",
-            }
-            price_words = {
-                "waste of money",
-                "overpriced",
-                "rip off",
-                "ripoff",
-                "scam",
-                "not worth",
-                "worthless",
-            }
-
-            text_lower = review_text.lower()
-            issues = set(ner.get("issues", []))
-
-            scores = {
-                "defect": 0.0,
-                "shipping": 0.0,
-                "description": 0.0,
-                "size": 0.0,
-                "price": 0.0,
-            }
-
-            for w in defect_words:
-                if w in text_lower or w in issues:
-                    scores["defect"] += 0.2
-            for w in shipping_words:
-                if w in text_lower or w in issues:
-                    scores["shipping"] += 0.2
-            for w in desc_words:
-                if w in text_lower or w in issues:
-                    scores["description"] += 0.2
-            for w in size_words:
-                if w in text_lower or w in issues:
-                    scores["size"] += 0.2
-            for w in price_words:
-                if w in text_lower or w in issues:
-                    scores["price"] += 0.2
-
-            for k in scores:
-                scores[k] = min(1.0, scores[k])
-
-            st.subheader("Root Cause Classification")
-            for cat, score in scores.items():
-                st.progress(
-                    score,
-                    text=f"{cat}: {score:.0%}",
+    if st.button("Classify", type="primary") and review_text:
+        with st.spinner("Classifying..."):
+            try:
+                from src.features.ner_extractor import (
+                    extract_fast,
                 )
 
-        except Exception as e:
-            st.error(f"Classification failed: {e}")
+                ner = extract_fast(review_text)
+
+                render_section_divider("NER ENTITIES")
+                col1, col2 = st.columns(2)
+                with col1:
+                    comps = (
+                        " ".join(badge(c, "badge-blue") for c in ner["components"])
+                        or '<span class="text-muted">None detected</span>'
+                    )
+                    st.markdown(
+                        f'<div class="card">'
+                        f'<div class="metric-label">Components</div>'
+                        f"{comps}</div>",
+                        unsafe_allow_html=True,
+                    )
+                with col2:
+                    issues = (
+                        " ".join(badge(i, "badge-red") for i in ner["issues"])
+                        or '<span class="text-muted">None detected</span>'
+                    )
+                    st.markdown(
+                        f'<div class="card">'
+                        f'<div class="metric-label">Issues</div>'
+                        f"{issues}</div>",
+                        unsafe_allow_html=True,
+                    )
+
+                render_section_divider("ROOT CAUSE CLASSIFICATION")
+
+                cat_config = {
+                    "defect": {
+                        "color": "#dc2626",
+                        "bg": "#fee2e2",
+                        "words": [
+                            "broke",
+                            "broken",
+                            "cracked",
+                            "defective",
+                            "faulty",
+                            "malfunction",
+                            "dead",
+                            "died",
+                            "stopped working",
+                            "not working",
+                            "doesn't work",
+                            "does not work",
+                            "won't turn on",
+                            "won't charge",
+                            "overheating",
+                            "overheat",
+                            "slow",
+                            "laggy",
+                            "freezing",
+                            "crash",
+                            "crashed",
+                            "glitchy",
+                            "buggy",
+                            "discharged",
+                            "drains",
+                            "unresponsive",
+                        ],
+                    },
+                    "shipping": {
+                        "color": "#2563eb",
+                        "bg": "#dbeafe",
+                        "words": [
+                            "arrived damaged",
+                            "arrived broken",
+                            "missing parts",
+                            "wrong item",
+                            "wrong product",
+                            "late delivery",
+                            "never arrived",
+                            "incomplete",
+                            "damaged in transit",
+                        ],
+                    },
+                    "description": {
+                        "color": "#7c3aed",
+                        "bg": "#ede9fe",
+                        "words": [
+                            "misleading",
+                            "not as described",
+                            "not as advertised",
+                            "false advertising",
+                            "cheaply made",
+                            "cheap quality",
+                            "poor quality",
+                            "low quality",
+                            "flimsy",
+                            "looks nothing like",
+                            "doesn't match",
+                            "does not match",
+                            "description",
+                            "listing",
+                        ],
+                    },
+                    "size": {
+                        "color": "#d97706",
+                        "bg": "#fef3c7",
+                        "words": [
+                            "too small",
+                            "too big",
+                            "too large",
+                            "too tight",
+                            "doesn't fit",
+                            "does not fit",
+                            "wrong size",
+                        ],
+                    },
+                    "price": {
+                        "color": "#0d9488",
+                        "bg": "#cffafe",
+                        "words": [
+                            "waste of money",
+                            "overpriced",
+                            "rip off",
+                            "ripoff",
+                            "scam",
+                            "not worth",
+                            "worthless",
+                        ],
+                    },
+                }
+
+                text_lower = review_text.lower()
+                ner_issues = set(ner.get("issues", []))
+
+                for cat, cfg in cat_config.items():
+                    score = 0.0
+                    for w in cfg["words"]:
+                        if w in text_lower or w in ner_issues:
+                            score += 0.2
+                    score = min(1.0, score)
+                    pct = int(score * 100)
+
+                    st.markdown(
+                        f'<div style="margin-bottom:10px">'
+                        f'<div class="flex items-center gap-8">'
+                        f'<span style="width:100px;font-weight:600;'
+                        f'font-size:14px;text-transform:capitalize">'
+                        f"{cat}</span>"
+                        f'<div style="flex:1;background:#f0f0ec;'
+                        f'border-radius:8px;height:28px;overflow:hidden">'
+                        f'<div style="width:{pct}%;height:100%;'
+                        f"background:{cfg['color']};border-radius:8px;"
+                        f'transition:width 0.5s ease"></div></div>'
+                        f'<span style="width:50px;text-align:right;'
+                        f"font-weight:700;font-size:14px;"
+                        f"color:{cfg['color']}\">{pct}%</span>"
+                        f"</div></div>",
+                        unsafe_allow_html=True,
+                    )
+
+            except Exception as e:
+                st.error(f"Classification failed: {e}")
 
 
-# ─── Page 4: Semantic Search ─────────────────────────
-elif page == "Semantic Search":
-    st.header("Semantic Search")
-    st.markdown("Search reviews by meaning, not just keywords.")
+# ═══════════════════════════════════════════════════
+# PAGE 4 — Semantic Search
+# ═══════════════════════════════════════════════════
+
+
+def page_search():
+    render_page_header(
+        "Semantic Search",
+        "Search 50K review embeddings by meaning, not just keywords",
+    )
+
+
+    search_examples = {
+        "Bluetooth": "bluetooth keeps disconnecting",
+        "Battery": "battery drains too fast",
+        "Screen": "screen flickering and dim",
+        "Charging": "won't charge after a month",
+        "Sound": "terrible sound quality",
+        "Size": "too small doesn't fit",
+    }
+
+    render_section_divider("TRY THESE")
+    ex_cols = st.columns(len(search_examples))
+    for col, (name, txt) in zip(ex_cols, search_examples.items()):
+        with col:
+            if st.button(
+                name,
+                key=f"se_{name}",
+                use_container_width=True,
+            ):
+                st.session_state["search_q"] = txt
 
     query = st.text_input(
         "Search query",
+        value=st.session_state.get("search_q", ""),
         placeholder="e.g., bluetooth keeps disconnecting",
     )
-
     max_rating = st.slider("Max rating filter", 1.0, 5.0, 3.0, 0.5)
 
-    if st.button("Search") and query:
-        try:
-            from src.api.semantic_search import search_reviews
+    if st.button("Search", type="primary") and query:
+        with st.spinner("Searching embeddings..."):
+            try:
+                from src.api.semantic_search import (
+                    search_reviews,
+                )
 
-            results = search_reviews(
-                query=query,
-                n_results=10,
-                max_rating=max_rating,
-            )
+                results = search_reviews(
+                    query=query,
+                    n_results=10,
+                    max_rating=max_rating,
+                )
 
-            if not results:
-                st.info("No matching reviews found.")
-            else:
+                if not results:
+                    st.info("No matching reviews found.")
+                    return
+
+                st.markdown(
+                    f'<div class="text-sm text-muted" '
+                    f'style="margin-bottom:14px">'
+                    f"Found {len(results)} results</div>",
+                    unsafe_allow_html=True,
+                )
+
                 for r in results:
-                    with st.expander(
-                        f"{'⭐' * int(r['rating'])} "
-                        f"{r['title']} "
-                        f"(similarity: "
-                        f"{1 - r['distance']:.2f})"
-                    ):
-                        st.write(r["text"])
-                        st.caption(f"ASIN: {r['asin']}")
-        except Exception as e:
-            st.error(f"Search failed: {e}")
+                    sim = 1 - r["distance"]
+                    sim_cls = (
+                        "badge-green"
+                        if sim > 0.7
+                        else "badge-amber" if sim > 0.5 else "badge-red"
+                    )
+                    r_val = int(r["rating"])
+                    star_cls = (
+                        "badge-green"
+                        if r_val >= 4
+                        else "badge-amber" if r_val >= 3 else "badge-red"
+                    )
+                    stars = "★" * r_val + "☆" * (5 - r_val)
+
+                    st.markdown(
+                        f'<div class="card">'
+                        f'<div class="flex items-center gap-8 mb-4">'
+                        f"{badge(stars, star_cls)} "
+                        f'{badge(f"Similarity: {sim:.2f}", sim_cls)} '
+                        f'{mono(r["asin"])}'
+                        f"</div>"
+                        f'<div style="font-weight:600;margin-bottom:6px">'
+                        f'{r.get("title", "")}</div>'
+                        f'<div class="text-sm" style="color:#4b4a45">'
+                        f'{r["text"][:300]}...</div>'
+                        f"</div>",
+                        unsafe_allow_html=True,
+                    )
+
+            except Exception as e:
+                st.error(f"Search failed: {e}")
 
 
-# ─── Page 5: Model Performance ───────────────────────
-elif page == "Model Performance":
-    st.header("Model Performance")
+# ═══════════════════════════════════════════════════
+# PAGE 5 — Model Performance
+# ═══════════════════════════════════════════════════
 
-    st.subheader("Model Metrics")
 
-    metrics = {
-        "Root Cause Classifier": {
-            "Metric": "Macro-F1",
-            "Target": "> 0.70",
-            "Actual": "0.7339",
-            "Status": "PASS",
-        },
-        "Anomaly Detector": {
-            "Metric": "Threshold@95th",
-            "Target": "—",
-            "Actual": "0.213 (21,310 alerts)",
-            "Status": "PASS",
-        },
-        "Helpfulness Predictor": {
-            "Metric": "MAE",
-            "Target": "< 2.0",
-            "Actual": "1.46",
-            "Status": "PASS",
-        },
-        "Fine-tuned Mistral": {
-            "Metric": "Judge Avg",
-            "Target": "> 3.5/5",
-            "Actual": "3.90/5",
-            "Status": "PASS",
-        },
-        "A/B Test (base vs tuned)": {
-            "Metric": "p-value",
-            "Target": "< 0.05",
-            "Actual": "0.72",
-            "Status": "No sig. diff",
-        },
-    }
-
-    metrics_df = pd.DataFrame(metrics).T
-    metrics_df.index.name = "Model"
-    st.dataframe(metrics_df, use_container_width=True)
-
-    st.subheader("Classifier Performance")
-    st.markdown(
-        """
-        | Category | Precision | Recall | F1 | Support |
-        |----------|-----------|--------|----|---------|
-        | defect | 0.92 | 0.88 | 0.90 | 417 |
-        | shipping | 0.60 | 0.62 | 0.61 | 52 |
-        | description | 0.57 | 0.65 | 0.61 | 51 |
-        | size | 0.69 | 0.91 | 0.79 | 45 |
-        | price | 0.70 | 0.85 | 0.77 | 92 |
-        """
+def page_performance():
+    render_page_header(
+        "Model Performance",
+        "Metrics, evaluation results, and drift monitoring",
     )
 
-    st.subheader("LLM Evaluation")
-    eval_data = {
-        "Metric": [
-            "accuracy",
-            "completeness",
-            "actionability",
-            "conciseness",
+    render_section_divider("MODEL METRICS")
+
+    render_metric_cards(
+        [
+            {
+                "label": "Root Cause Classifier",
+                "value": "F1 = 0.7339",
+                "delta": badge("PASS", "badge-green"),
+                "color": "#0d9f6e",
+            },
+            {
+                "label": "Anomaly Detector",
+                "value": "21,310 alerts",
+                "delta": badge("PASS", "badge-green"),
+                "color": "#0d9f6e",
+            },
+            {
+                "label": "Helpfulness Predictor",
+                "value": "MAE = 1.46",
+                "delta": badge("PASS", "badge-green"),
+                "color": "#0d9f6e",
+            },
+            {
+                "label": "Fine-tuned Mistral",
+                "value": "3.90 / 5",
+                "delta": badge("PASS", "badge-green"),
+                "color": "#0d9f6e",
+            },
+        ]
+    )
+
+    render_section_divider("CLASSIFIER PER-CATEGORY")
+
+    render_table(
+        [
+            "Category",
+            "Precision",
+            "Recall",
+            "F1-Score",
+            "Support",
         ],
-        "Base (Groq)": [3.61, 3.65, 4.22, 4.29],
-        "Fine-tuned": [3.58, 3.58, 4.16, 4.28],
-    }
-    eval_df = pd.DataFrame(eval_data)
-    st.bar_chart(
-        eval_df.set_index("Metric"),
+        [
+            [
+                badge("defect", "badge-red"),
+                "0.92",
+                "0.88",
+                '<span style="font-weight:700">0.90</span>',
+                "417",
+            ],
+            [
+                badge("shipping", "badge-blue"),
+                "0.60",
+                "0.62",
+                '<span style="font-weight:700">0.61</span>',
+                "52",
+            ],
+            [
+                badge("description", "badge-purple"),
+                "0.57",
+                "0.65",
+                '<span style="font-weight:700">0.61</span>',
+                "51",
+            ],
+            [
+                badge("size", "badge-amber"),
+                "0.69",
+                "0.91",
+                '<span style="font-weight:700">0.79</span>',
+                "45",
+            ],
+            [
+                badge("price", "badge-teal"),
+                "0.70",
+                "0.85",
+                '<span style="font-weight:700">0.77</span>',
+                "92",
+            ],
+        ],
     )
+
+    render_section_divider("LLM EVALUATION")
+
+    eval_data = pd.DataFrame(
+        {
+            "Metric": [
+                "Accuracy",
+                "Completeness",
+                "Actionability",
+                "Conciseness",
+            ],
+            "Base (Groq)": [3.61, 3.65, 4.22, 4.29],
+            "Fine-tuned": [3.58, 3.58, 4.16, 4.28],
+        }
+    )
+
+    fig = go.Figure()
+    fig.add_trace(
+        go.Bar(
+            name="Base (Groq)",
+            x=eval_data["Metric"],
+            y=eval_data["Base (Groq)"],
+            marker_color="#6366f1",
+        )
+    )
+    fig.add_trace(
+        go.Bar(
+            name="Fine-tuned",
+            x=eval_data["Metric"],
+            y=eval_data["Fine-tuned"],
+            marker_color="#14b8a6",
+        )
+    )
+    fig.update_layout(
+        barmode="group",
+        height=350,
+        margin=dict(t=30, b=30),
+        plot_bgcolor="white",
+        paper_bgcolor="white",
+        font=dict(family="DM Sans, sans-serif"),
+        yaxis=dict(range=[0, 5], title="Score (1-5)"),
+        legend=dict(orientation="h", y=-0.15, x=0.5, xanchor="center"),
+    )
+    st.plotly_chart(fig, use_container_width=True)
 
     # Drift monitoring
-    st.subheader("Data Drift")
+    render_section_divider("DATA DRIFT MONITORING")
     report_path = "reports/drift_report.html"
     if os.path.exists(report_path):
         with open(report_path, "r", encoding="utf-8") as f:
             html_content = f.read()
         scaled_html = (
-            '<div style="transform: scale(0.7); '
-            "transform-origin: top left; "
-            'width: 143%; height: 143%;">'
+            '<div style="transform:scale(0.65);'
+            "transform-origin:top left;"
+            'width:154%;height:154%">'
             f"{html_content}</div>"
         )
-        st.components.v1.html(scaled_html, height=1000, scrolling=True)
+        st.components.v1.html(scaled_html, height=900, scrolling=True)
     else:
         st.info(
             "Run `poetry run python src/mlops/drift_monitor.py` "
             "to generate the drift report."
         )
+
+
+# ═══════════════════════════════════════════════════
+# CSS — matching reference style
+# ═══════════════════════════════════════════════════
+
+st.markdown(
+    """<style>
+:root{--green:#0d9f6e;--red:#dc2626;--amber:#d97706;
+--blue:#2563eb;--teal:#0d9488;--purple:#7c3aed}
+.stApp{background:#f8f7f4;color:#1a1a1e}
+.block-container{max-width:1100px;padding-top:50px;
+padding-bottom:50px}
+footer{visibility:hidden}
+[data-testid="stSidebar"]>div:first-child{
+padding:0px 14px 14px !important;background:#1a1a1e}
+[data-testid="stSidebar"] *{color:#e0dfd8}
+[data-testid="stSidebar"] label{font-size:11px !important;
+text-transform:uppercase;letter-spacing:.8px;
+color:#7a7972 !important}
+[data-testid="stSidebar"] button{color:#1a1a1e !important;
+background:#d4d3ce !important;border:1px solid #9c9a92 !important;
+font-weight:600 !important}
+[data-testid="stSidebar"] button:hover{
+background:#ffffff !important;color:#1a1a1e !important}
+[data-testid="stSidebar"] hr{margin:6px 0 !important}
+[data-testid="stSidebar"] [role="radiogroup"] label{
+background:transparent !important;border:none !important;
+padding:6px 0 !important;margin:0 !important}
+[data-testid="stSidebar"] .stSelectbox [data-baseweb="select"]>div{
+background:#2a2a2f !important;
+border:1px solid rgba(255,255,255,0.06) !important;
+border-radius:6px !important;color:#e0dfd8 !important}
+[data-testid="stSidebar"] .stSelectbox [data-baseweb="select"] span{
+color:#e0dfd8 !important}
+[data-testid="stSidebar"] .stSelectbox [data-baseweb="select"] svg{
+fill:#e0dfd8 !important}
+.stButton>button[kind="primary"]{background-color:#6366f1 !important;
+border-color:#6366f1 !important;color:#fff !important}
+.stButton>button[kind="primary"]:hover{
+background-color:#4f46e5 !important}
+.sidebar-brand{font-size:13px;font-weight:500;
+letter-spacing:2px;text-transform:uppercase;
+color:#9c9a92;margin-bottom:4px}
+.sidebar-title{font-size:20px;font-weight:600;
+color:#fff;margin-bottom:8px}
+.sidebar-status-row{font-size:12px;color:#d1d5db;
+margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.status-dot{display:inline-block;width:7px;height:7px;
+border-radius:50%}
+.status-green{background:#10b981}
+.status-red{background:#ef4444}
+.page-header-block{margin-bottom:10px}
+.page-title{font-size:24px;font-weight:600;color:#1a1a1e}
+.page-subtitle{font-size:13px;color:#9c9a92;
+margin-top:2px;margin-bottom:16px}
+.metric-card{background:#fff;border-radius:10px;
+padding:16px 18px;border:1px solid rgba(0,0,0,0.08);
+margin-bottom:14px;min-height:110px}
+.metric-card:hover{box-shadow:0 2px 8px rgba(0,0,0,0.06)}
+.metric-label{font-size:12px;text-transform:uppercase;
+letter-spacing:.6px;color:#6b6a65;margin-bottom:4px;
+font-weight:500}
+.metric-value{font-size:24px;font-weight:700;line-height:1.2;
+white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.metric-delta{font-size:13px;margin-top:3px}
+.text-muted{color:#9c9a92}
+.text-mono{font-family:Consolas,monospace}
+.text-xs{font-size:12px}.text-sm{font-size:13px}
+.mb-4{margin-bottom:4px}.mb-8{margin-bottom:8px}
+.flex{display:flex}.items-center{align-items:center}
+.gap-8{gap:8px}
+.badge{display:inline-flex;align-items:center;
+padding:4px 12px;border-radius:20px;font-size:13px;
+font-weight:700;letter-spacing:0.2px;margin:2px}
+.badge-green{background:#d1fae5;color:#065f46}
+.badge-amber{background:#fef3c7;color:#7c2d12}
+.badge-red{background:#fee2e2;color:#991b1b}
+.badge-blue{background:#dbeafe;color:#1e40af}
+.badge-purple{background:#ede9fe;color:#6d28d9}
+.badge-teal{background:#cffafe;color:#155e75}
+.card{background:#fff;border:1px solid rgba(0,0,0,0.08);
+border-radius:14px;padding:20px 22px;margin-bottom:16px}
+.card-title{font-size:16px;font-weight:600;
+margin-bottom:14px;color:#1a1a1e}
+.table-wrap{overflow-x:auto;border-radius:10px;
+border:1px solid #e8e7e3;background:#fff}
+table{width:100%;border-collapse:collapse;font-size:14px}
+thead th{text-align:left;padding:12px 14px;font-size:12px;
+text-transform:uppercase;letter-spacing:.5px;color:#6b6a65;
+font-weight:600;background:#fafaf8;
+border-bottom:1px solid #e8e7e3}
+tbody td{padding:12px 14px;border-bottom:1px solid #e8e7e3;
+color:#1a1a2e;font-size:14px}
+tbody tr:last-child td{border-bottom:none}
+.section-divider{display:flex;align-items:center;
+gap:12px;margin:36px 0 20px}
+.section-divider-line{flex:1;height:1px;
+background:rgba(0,0,0,0.08)}
+.section-divider-label{font-size:12px;
+text-transform:uppercase;letter-spacing:1.5px;
+color:#6b6a65;white-space:nowrap;font-weight:600}
+</style>""",
+    unsafe_allow_html=True,
+)
+
+# ── Page dispatch ───────────────────────────────────
+
+_DISPATCH = {
+    "◈ Quality Alerts": page_alerts,
+    "◆ Product Deep Dive": page_deep_dive,
+    "✦ Classifier Demo": page_classifier,
+    "◎ Semantic Search": page_search,
+    "▣ Model Performance": page_performance,
+}
+
+_DISPATCH.get(page, page_alerts)()
