@@ -5,6 +5,8 @@ Classifier Demo, Semantic Search, Model Performance.
 """
 
 import os
+import re
+import sys
 from collections import Counter
 
 import pandas as pd
@@ -14,6 +16,13 @@ from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 
 load_dotenv()
+
+# Add project root to path for imports
+_ROOT = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "..")
+)
+if _ROOT not in sys.path:
+    sys.path.insert(0, _ROOT)
 
 # ── Page config ─────────────────────────────────────
 st.set_page_config(
@@ -400,9 +409,15 @@ def page_deep_dive():
     with st.spinner("Running NER..."):
         try:
             reviews = load_reviews_for_product(selected)
-            from src.features.ner_extractor import (
-                extract_batch_fast,
-            )
+            try:
+                from src.features.ner_extractor import (
+                    extract_batch_fast,
+                )
+            except ImportError:
+                _dash_dir = os.path.dirname(os.path.abspath(__file__))
+                if _dash_dir not in sys.path:
+                    sys.path.insert(0, _dash_dir)
+                from ner_inline import extract_batch_fast
 
             texts = reviews["text"].fillna("").tolist()
             ner_results = extract_batch_fast(texts)
@@ -531,9 +546,15 @@ def page_classifier():
     if st.button("Classify", type="primary") and review_text:
         with st.spinner("Classifying..."):
             try:
-                from src.features.ner_extractor import (
-                    extract_fast,
-                )
+                try:
+                    from src.features.ner_extractor import (
+                        extract_fast,
+                    )
+                except ImportError:
+                    _dash_dir = os.path.dirname(os.path.abspath(__file__))
+                    if _dash_dir not in sys.path:
+                        sys.path.insert(0, _dash_dir)
+                    from ner_inline import extract_fast
 
                 ner = extract_fast(review_text)
 
@@ -952,7 +973,7 @@ def page_performance():
 
     # Drift monitoring
     render_section_divider("DATA DRIFT MONITORING")
-    report_path = "reports/drift_report.html"
+    report_path = os.path.join(_ROOT, "reports", "drift_report.html")
     if os.path.exists(report_path):
         with open(report_path, "r", encoding="utf-8") as f:
             html_content = f.read()
@@ -965,8 +986,9 @@ def page_performance():
         st.components.v1.html(scaled_html, height=900, scrolling=True)
     else:
         st.info(
+            "Drift report not found. "
             "Run `poetry run python src/mlops/drift_monitor.py` "
-            "to generate the drift report."
+            "to generate it."
         )
 
 
@@ -1070,6 +1092,11 @@ background:rgba(0,0,0,0.08)}
 .section-divider-label{font-size:12px;
 text-transform:uppercase;letter-spacing:1.5px;
 color:#6b6a65;white-space:nowrap;font-weight:600}
+.stTextInput input,.stTextArea textarea,.stSelectbox [data-baseweb="select"]>div{
+color:#1a1a1e !important;background:#fff !important;
+border:1px solid #d4d3ce !important}
+.stTextArea textarea::placeholder,.stTextInput input::placeholder{
+color:#9c9a92 !important}
 </style>""",
     unsafe_allow_html=True,
 )
