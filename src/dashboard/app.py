@@ -26,17 +26,24 @@ st.set_page_config(
 # ── Database ────────────────────────────────────────
 
 
+def _get_secret(key, default=None):
+    """Read from Streamlit secrets or env vars."""
+    try:
+        return st.secrets[key]
+    except Exception:
+        return os.environ.get(key, default)
+
+
 @st.cache_resource
 def get_engine():
-    # Use Neon cloud DB if available, else local
-    neon_url = os.environ.get("NEON_DATABASE_URL")
+    neon_url = _get_secret("NEON_DATABASE_URL")
     if neon_url:
         return create_engine(neon_url)
-    host = os.environ.get("POSTGRES_HOST", "localhost")
-    port = os.environ.get("POSTGRES_PORT", "5432")
-    db = os.environ.get("POSTGRES_DB", "product_intelligence")
-    user = os.environ.get("POSTGRES_USER", "postgres")
-    pw = os.environ.get("POSTGRES_PASSWORD", "postgres")
+    host = _get_secret("POSTGRES_HOST", "localhost")
+    port = _get_secret("POSTGRES_PORT", "5432")
+    db = _get_secret("POSTGRES_DB", "product_intelligence")
+    user = _get_secret("POSTGRES_USER", "postgres")
+    pw = _get_secret("POSTGRES_PASSWORD", "postgres")
     return create_engine(f"postgresql://{user}:{pw}@{host}:{port}/{db}")
 
 

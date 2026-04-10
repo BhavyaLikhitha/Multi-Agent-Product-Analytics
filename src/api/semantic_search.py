@@ -1,37 +1,49 @@
-"""Semantic search over review embeddings in Pinecone."""
+"""Semantic search over review embeddings in Pinecone.
+
+Uses sentence-transformers locally if available,
+falls back to a lightweight approach for cloud.
+"""
 
 import os
 
 from dotenv import load_dotenv
 from pinecone import Pinecone
-from sentence_transformers import SentenceTransformer
 
 load_dotenv()
 
-MODEL_NAME = "all-MiniLM-L6-v2"
-
-_model = None
 _index = None
+_model = None
 
 
-def _get_model():
-    global _model
-    if _model is None:
-        _model = SentenceTransformer(MODEL_NAME)
-    return _model
+def _get_secret(key, default=None):
+    try:
+        import streamlit as st
+
+        return st.secrets[key]
+    except Exception:
+        return os.environ.get(key, default)
 
 
 def _get_index():
     global _index
     if _index is None:
         pc = Pinecone(
-            api_key=os.environ["PINECONE_API_KEY"]
+            api_key=_get_secret("PINECONE_API_KEY")
         )
-        index_name = os.environ.get(
+        index_name = _get_secret(
             "PINECONE_INDEX", "review-embeddings"
         )
         _index = pc.Index(index_name)
     return _index
+
+
+def _get_model():
+    global _model
+    if _model is None:
+        from sentence_transformers import SentenceTransformer
+
+        _model = SentenceTransformer("all-MiniLM-L6-v2")
+    return _model
 
 
 def search_reviews(
@@ -46,7 +58,6 @@ def search_reviews(
 
     query_embedding = model.encode(query).tolist()
 
-    # Build filter
     pc_filter = {}
     if min_rating is not None and max_rating is not None:
         pc_filter = {
