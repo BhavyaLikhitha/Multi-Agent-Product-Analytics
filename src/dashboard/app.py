@@ -725,31 +725,24 @@ def page_search():
         "Search 50K review embeddings by meaning, not just keywords",
     )
 
-    # Check if search dependencies are available
-    try:
-        import torch  # noqa: F401
-    except ImportError:
+    # Check if Pinecone is configured
+    if not _get_secret("PINECONE_API_KEY"):
         st.markdown(
             '<div class="card">'
             '<div class="card-title">Semantic Search</div>'
             '<div class="text-sm" style="color:#4b4a45">'
-            "This feature requires PyTorch and "
-            "sentence-transformers which are available "
-            "in the local deployment.<br><br>"
+            "Pinecone API key not configured.<br><br>"
             "<b>How it works:</b> Natural language queries "
             "like 'bluetooth keeps disconnecting' are "
             "encoded into 384-dim vectors and matched "
             "against 8,963 review embeddings in Pinecone "
             "using cosine similarity.<br><br>"
-            "<b>To try locally:</b><br>"
-            "<code>docker-compose up -d</code><br>"
-            "<code>poetry run streamlit run "
-            "src/dashboard/app.py</code>"
+            "<b>Setup:</b> Add <code>PINECONE_API_KEY</code> "
+            "to your Streamlit secrets or environment."
             "</div></div>",
             unsafe_allow_html=True,
         )
         return
-
 
     search_examples = {
         "Bluetooth": "bluetooth keeps disconnecting",
