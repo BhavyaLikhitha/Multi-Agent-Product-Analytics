@@ -105,61 +105,9 @@ The models, pipeline architecture, and agent workflow answer the questions produ
 
 ## 🏗️ Architecture
 
-```
-                         ┌──────────────────────────────────┐
-                         │        Streamlit Dashboard        │
-                         │  Alerts │ Deep Dive │ Classifier  │
-                         │  Search │ Model Performance       │
-                         └──────────────┬───────────────────┘
-                                        │
-                              ┌─────────▼─────────┐
-                              │    FastAPI Backend  │
-                              │  /analyze /alerts   │
-                              │  /classify /search   │
-                              └────┬──────────┬────┘
-                                   │          │
-                    ┌──────────────▼──┐  ┌────▼──────────────────┐
-                    │   LangGraph      │  │    ML Models (PyTorch) │
-                    │   Agent Pipeline │  │                        │
-                    │                  │  │  Root Cause Classifier  │
-                    │  ┌─Analyzer──┐   │  │  (DistilBERT, F1=0.73) │
-                    │  │  Reviews  │   │  │                        │
-                    │  │  + NER    │   │  │  Anomaly Detector      │
-                    │  └────┬──────┘   │  │  (Autoencoder, 21K)    │
-                    │  ┌────▼──────┐   │  │                        │
-                    │  │  Auditor  │   │  │  Helpfulness Predictor │
-                    │  │  Listing  │   │  │  (NN, MAE=1.46)        │
-                    │  │  vs Reviews│  │  └────────────────────────┘
-                    │  └────┬──────┘   │
-                    │  ┌────▼──────┐   │       ┌──────────────────┐
-                    │  │ Rewriter  │   │       │  Mistral-7B      │
-                    │  │ Groq LLM  │───│───────│  QLoRA Fine-tuned │
-                    │  └────┬──────┘   │       │  (Summarization)  │
-                    │  ┌────▼──────┐   │       └──────────────────┘
-                    │  │Supervisor │   │
-                    │  │Human-in-  │   │
-                    │  │the-loop   │   │
-                    │  └───────────┘   │
-                    └──────────────────┘
-                                │
-          ┌─────────────────────┼─────────────────────┐
-          │                     │                     │
-  ┌───────▼────────┐  ┌────────▼───────┐  ┌─────────▼────────┐
-  │  PostgreSQL     │  │   Snowflake    │  │    ChromaDB       │
-  │  (Docker)       │  │   (Cloud)      │  │    (Docker)       │
-  │                 │  │                │  │                   │
-  │  Reviews (500K) │  │  Full Dataset  │  │  Review Embeddings│
-  │  Products (1.6M)│  │  (Warehouse)   │  │  (50K × 384-dim)  │
-  │  Alerts (21K)   │  └────────────────┘  │                   │
-  │  Features (486K)│                      │  Semantic Search  │
-  └─────────────────┘                      └───────────────────┘
-
-  ┌──────────────────────────────────────────────────────────────┐
-  │                        MLOps Layer                           │
-  │  MLflow (experiments) │ Evidently (drift) │ GitHub Actions   │
-  │  DVC (pipelines)      │ Docker (infra)    │ (CI/CD)          │
-  └──────────────────────────────────────────────────────────────┘
-```
+<p align="center">
+  <img src="architecture.png" alt="Architecture Diagram" width="100%">
+</p>
 
 ### Why These Tools
 
